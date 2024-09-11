@@ -18,35 +18,26 @@ const (
 )
 
 type Job struct {
-	Id               string
-	Data             interface{}
-	Priority         int
-	Status           JobStatus
-	queue            *Queue
-	ProcessedOn      time.Time
-	FinishedOn       time.Time
-	Stacktrace       []string
-	FailedReason     string
-	RetryFailures    int
-	RemoveOnComplete bool
-	RemoveOnFail     bool
+	Id            string
+	Data          interface{}
+	Priority      int
+	Status        JobStatus
+	queue         *Queue
+	ProcessedOn   time.Time
+	FinishedOn    time.Time
+	Stacktrace    []string
+	FailedReason  string
+	RetryFailures int
 }
 
-type AddJobOptions struct {
-	RemoveOnComplete bool
-	RemoveOnFail     bool
-}
-
-func (queue *Queue) newJob(id string, data interface{}, opt AddJobOptions) *Job {
+func (queue *Queue) newJob(id string, data interface{}) *Job {
 	job := &Job{
-		Id:               id,
-		Data:             data,
-		Status:           WaitStatus,
-		Stacktrace:       []string{},
-		queue:            queue,
-		RetryFailures:    queue.RetryFailures,
-		RemoveOnComplete: opt.RemoveOnComplete,
-		RemoveOnFail:     opt.RemoveOnFail,
+		Id:            id,
+		Data:          data,
+		Status:        WaitStatus,
+		Stacktrace:    []string{},
+		queue:         queue,
+		RetryFailures: queue.RetryFailures,
 	}
 
 	return job
@@ -65,9 +56,6 @@ func (job *Job) Process(cb Callback) {
 		job.Status = CompletedStatus
 		logrus.Infof("Job %s done ✅ in %dms", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
 		println()
-		if job.RemoveOnComplete {
-			job.queue.Remove(job.Id)
-		}
 	} else {
 		job.FailedReason = err.Error()
 		job.Status = FailedStatus
@@ -82,9 +70,6 @@ func (job *Job) Process(cb Callback) {
 		} else {
 			logrus.Errorf("Failed job %s ❌", job.Id)
 			println()
-			if job.RemoveOnFail {
-				job.queue.Remove(job.Id)
-			}
 		}
 	}
 }

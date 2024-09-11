@@ -2,6 +2,8 @@ package queue
 
 import (
 	"encoding/json"
+	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/redis/go-redis/v9"
@@ -9,10 +11,14 @@ import (
 )
 
 func Test_Queue(t *testing.T) {
-	userQueue := New("user", &redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+	userQueue := New("user", &QueueOption{
+		Redis: &redis.Options{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		},
+		Workers:       2,
+		RetryFailures: 3,
 	})
 
 	t.Parallel()
@@ -32,6 +38,14 @@ func Test_Queue(t *testing.T) {
 	t.Run("TestCase", func(t *testing.T) {
 		userQueue.Process(func(job *Job) {
 			job.Process(func() error {
+				num, err := strconv.Atoi(job.Id)
+				if err != nil {
+					return err
+				}
+				if num%3 == 0 {
+					return errors.New("error by test")
+				}
+
 				key, err := json.Marshal(job.Data)
 				if err != nil {
 					return err

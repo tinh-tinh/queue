@@ -19,28 +19,29 @@ type Queue struct {
 	workers       int
 }
 
-func New(name string, opt *redis.Options) *Queue {
-	client := redis.NewClient(opt)
+type QueueOption struct {
+	Redis         *redis.Options
+	Workers       int
+	RetryFailures int
+}
+
+func New(name string, opt *QueueOption) *Queue {
+	client := redis.NewClient(opt.Redis)
 
 	pool := goredis.NewPool(client)
 	rs := redsync.New(pool)
 
 	return &Queue{
-		client:  client,
-		Name:    name,
-		rs:      rs,
-		workers: 3,
+		client:        client,
+		Name:          name,
+		rs:            rs,
+		workers:       opt.Workers,
+		RetryFailures: opt.RetryFailures,
 	}
 }
 
-func (q *Queue) AddJob(id string, data interface{}, opts ...AddJobOptions) {
-	if len(opts) == 0 {
-		opts = append(opts, AddJobOptions{
-			RemoveOnComplete: true,
-			RemoveOnFail:     true,
-		})
-	}
-	job := q.newJob(id, data, opts[0])
+func (q *Queue) AddJob(id string, data interface{}) {
+	job := q.newJob(id, data)
 	q.jobs = append(q.jobs, *job)
 }
 
@@ -58,27 +59,58 @@ func (q *Queue) Process(jobFnc JobFnc) {
 }
 
 func (q *Queue) Run(jobFnc JobFnc) {
-	for len(q.jobs) > 0 {
-		min := Min(len(q.jobs), q.workers)
-		numJobs := q.jobs[:min]
+	execJobs := []*Job{}
+	for i := 0; i < len(q.jobs); i++ {
+		if q.jobs[i].IsReady() {
+			execJobs = append(execJobs, &q.jobs[i])
+		}
+	}
+
+	for len(execJobs) > 0 {
+		min := Min(len(execJobs), q.workers)
+		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
 		for i := 0; i < len(numJobs); i++ {
-			job := q.jobs[i]
-			if job.IsReady() {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					jobFnc(&job)
-				}()
-			}
+			job := numJobs[i]
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				jobFnc(job)
+			}()
+		}
+		wg.Wait()
+		_, execJobs = execJobs[0], execJobs[min:]
+	}
 
-			if q.CountJobs(WaitStatus) == 0 {
-				break
-			}
+	q.Retry(jobFnc)
+}
+
+func (q *Queue) Retry(jobFnc JobFnc) {
+	execJobs := []*Job{}
+	// For retry failures
+	for i := 0; i < len(q.jobs); i++ {
+		if q.jobs[i].Status == DelayedStatus {
+			execJobs = append(execJobs, &q.jobs[i])
+		}
+	}
+
+	for len(execJobs) > 0 {
+		min := Min(len(execJobs), q.workers)
+		numJobs := execJobs[:min]
+		var wg sync.WaitGroup
+		for i := 0; i < len(numJobs); i++ {
+			job := numJobs[i]
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				jobFnc(job)
+				if job.Status == CompletedStatus || job.Status == FailedStatus {
+					_, execJobs = execJobs[0], execJobs[1:]
+				}
+			}()
 		}
 		wg.Wait()
 	}
-
 }
 
 func (q *Queue) CountJobs(status JobStatus) int {
