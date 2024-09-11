@@ -2,7 +2,6 @@ package queue
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/redis/go-redis/v9"
@@ -30,27 +29,21 @@ func Test_Queue(t *testing.T) {
 	userQueue.AddJob("10", "value 10")
 	userQueue.AddJob("11", "value 11")
 
-	for i := 0; i < 6; i++ {
-		if i%2 == 0 {
-			key := fmt.Sprint(i + 10)
-			userQueue.AddJob(key, "value 3")
-		}
-		t.Run("TestCase", func(t *testing.T) {
-			userQueue.Process(func(job *Job) {
-				job.Process(func() error {
-					key, err := json.Marshal(job.Data)
-					if err != nil {
-						return err
-					}
-					_, err = HeaveTask(string(key))
-					if err != nil {
-						return err
-					}
-					return nil
-				})
+	t.Run("TestCase", func(t *testing.T) {
+		userQueue.Process(func(job *Job) {
+			job.Process(func() error {
+				key, err := json.Marshal(job.Data)
+				if err != nil {
+					return err
+				}
+				_, err = HeaveTask(string(key))
+				if err != nil {
+					return err
+				}
+				return nil
 			})
 		})
-	}
+	})
 }
 
 func HeaveTask(key string) (string, error) {

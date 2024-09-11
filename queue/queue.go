@@ -16,6 +16,7 @@ type Queue struct {
 	rs            *redsync.Redsync
 	jobs          []Job
 	RetryFailures int
+	workers       int
 }
 
 func New(name string, opt *redis.Options) *Queue {
@@ -25,9 +26,10 @@ func New(name string, opt *redis.Options) *Queue {
 	rs := redsync.New(pool)
 
 	return &Queue{
-		client: client,
-		Name:   name,
-		rs:     rs,
+		client:  client,
+		Name:    name,
+		rs:      rs,
+		workers: 3,
 	}
 }
 
@@ -56,22 +58,27 @@ func (q *Queue) Process(jobFnc JobFnc) {
 }
 
 func (q *Queue) Run(jobFnc JobFnc) {
-	var wg sync.WaitGroup
-	for i := 0; i < len(q.jobs); i++ {
-		job := q.jobs[i]
-		if job.IsReady() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				jobFnc(&job)
-			}()
-		}
+	for len(q.jobs) > 0 {
+		min := Min(len(q.jobs), q.workers)
+		numJobs := q.jobs[:min]
+		var wg sync.WaitGroup
+		for i := 0; i < len(numJobs); i++ {
+			job := q.jobs[i]
+			if job.IsReady() {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					jobFnc(&job)
+				}()
+			}
 
-		if q.CountJobs(WaitStatus) == 0 {
-			break
+			if q.CountJobs(WaitStatus) == 0 {
+				break
+			}
 		}
+		wg.Wait()
 	}
-	wg.Wait()
+
 }
 
 func (q *Queue) CountJobs(status JobStatus) int {
@@ -91,4 +98,11 @@ func (q *Queue) Remove(key string) {
 		fmt.Print(findIdx)
 		q.jobs = append(q.jobs[:findIdx], q.jobs[findIdx+1:]...)
 	}
+}
+
+func Min(a int, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
