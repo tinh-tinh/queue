@@ -12,6 +12,7 @@ import (
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
+	"github.com/robfig/cron/v3"
 )
 
 type Queue struct {
@@ -23,6 +24,8 @@ type Queue struct {
 	workers       int
 	limiter       *RateLimiter
 	ctx           context.Context
+	scheduler     *cron.Cron
+	cronPattern   string
 }
 
 type RateLimiter struct {
@@ -35,6 +38,7 @@ type QueueOption struct {
 	Workers       int
 	RetryFailures int
 	Limiter       *RateLimiter
+	Pattern       string
 }
 
 func New(name string, opt *QueueOption) *Queue {
@@ -43,7 +47,7 @@ func New(name string, opt *QueueOption) *Queue {
 	pool := goredis.NewPool(client)
 	rs := redsync.New(pool)
 
-	return &Queue{
+	queue := &Queue{
 		client:        client,
 		Name:          name,
 		rs:            rs,
@@ -52,6 +56,13 @@ func New(name string, opt *QueueOption) *Queue {
 		limiter:       opt.Limiter,
 		ctx:           context.Background(),
 	}
+
+	if opt.Pattern != "" {
+		queue.scheduler = cron.New()
+		queue.cronPattern = opt.Pattern
+	}
+
+	return queue
 }
 
 func (q *Queue) AddJob(id string, data interface{}) {
@@ -69,17 +80,34 @@ func (q *Queue) AddJob(id string, data interface{}) {
 type JobFnc func(job *Job)
 
 func (q *Queue) Process(jobFnc JobFnc) {
-	mutex := q.rs.NewMutex(q.Name)
-	if err := mutex.Lock(); err != nil {
-		panic(err)
-	}
-	q.Run(jobFnc)
-	if ok, err := mutex.Unlock(); !ok || err != nil {
-		panic("unlock failed")
+	if q.scheduler == nil {
+		mutex := q.rs.NewMutex(q.Name)
+		if err := mutex.Lock(); err != nil {
+			panic(err)
+		}
+		q.Run(jobFnc)
+		if ok, err := mutex.Unlock(); !ok || err != nil {
+			panic("unlock failed")
+		}
+	} else {
+		fmt.Println(q.cronPattern)
+		// q.scheduler.AddFunc(q.cronPattern, func() {
+		// 	// mutex := q.rs.NewMutex(q.Name)
+		// 	// if err := mutex.Lock(); err != nil {
+		// 	// 	panic(err)
+		// 	// }
+		// 	q.Run(jobFnc)
+		// 	// if ok, err := mutex.Unlock(); !ok || err != nil {
+		// 	// 	panic("unlock failed")
+		// 	// }
+		// })
+		q.scheduler.AddFunc(q.cronPattern, func() { fmt.Println("Every second") })
+		q.scheduler.Start()
 	}
 }
 
 func (q *Queue) Run(jobFnc JobFnc) {
+	fmt.Printf("Running on %s\n", time.Now().String())
 	execJobs := []*Job{}
 	for i := 0; i < len(q.jobs); i++ {
 		if q.jobs[i].IsReady() {
