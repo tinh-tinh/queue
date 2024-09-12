@@ -1,9 +1,13 @@
 package queue
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
@@ -17,12 +21,20 @@ type Queue struct {
 	jobs          []Job
 	RetryFailures int
 	workers       int
+	limiter       *RateLimiter
+	ctx           context.Context
+}
+
+type RateLimiter struct {
+	Max      int
+	Duration time.Duration
 }
 
 type QueueOption struct {
 	Redis         *redis.Options
 	Workers       int
 	RetryFailures int
+	Limiter       *RateLimiter
 }
 
 func New(name string, opt *QueueOption) *Queue {
@@ -37,11 +49,20 @@ func New(name string, opt *QueueOption) *Queue {
 		rs:            rs,
 		workers:       opt.Workers,
 		RetryFailures: opt.RetryFailures,
+		limiter:       opt.Limiter,
+		ctx:           context.Background(),
 	}
 }
 
 func (q *Queue) AddJob(id string, data interface{}) {
-	job := q.newJob(id, data)
+	var job *Job
+	if q.IsLimit() {
+		fmt.Printf("Add job %s to delay\n", id)
+		job = q.delayJob(id, data)
+	} else {
+		fmt.Printf("Add job %s to waiting\n", id)
+		job = q.newJob(id, data)
+	}
 	q.jobs = append(q.jobs, *job)
 }
 
@@ -104,7 +125,7 @@ func (q *Queue) Retry(jobFnc JobFnc) {
 			go func() {
 				defer wg.Done()
 				jobFnc(job)
-				if job.Status == CompletedStatus || job.Status == FailedStatus {
+				if job.IsFinished() {
 					_, execJobs = execJobs[0], execJobs[1:]
 				}
 			}()
@@ -137,4 +158,25 @@ func Min(a int, b int) int {
 		return a
 	}
 	return b
+}
+
+func (q *Queue) IsLimit() bool {
+	if q.limiter == nil {
+		return false
+	}
+	client := q.client
+	attemps, _ := client.Get(q.ctx, q.Name).Result()
+	attempNum, _ := strconv.Atoi(attemps)
+	if attemps != "" && attempNum >= q.limiter.Max {
+		return true
+	} else {
+		value, err := client.Incr(q.ctx, q.Name).Result()
+		if err != nil {
+			panic(errors.New("fail to incr data"))
+		}
+		if value == 1 {
+			client.Expire(q.ctx, q.Name, q.limiter.Duration)
+		}
+		return false
+	}
 }

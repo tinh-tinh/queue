@@ -3,8 +3,10 @@ package queue
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -19,20 +21,36 @@ func Test_Queue(t *testing.T) {
 		},
 		Workers:       6,
 		RetryFailures: 3,
+		Limiter: &RateLimiter{
+			Max:      3,
+			Duration: time.Millisecond,
+		},
 	})
 
+	fmt.Println(userQueue)
 	t.Parallel()
 
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("1", "value 1")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("2", "value 2")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("3", "value 3")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("4", "value 4")
+	time.Sleep(time.Second)
 	userQueue.AddJob("5", "value 5")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("6", "value 6")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("7", "value 7")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("8", "value 8")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("9", "value 9")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("10", "value 10")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("11", "value 11")
 
 	t.Run("TestCase", func(t *testing.T) {

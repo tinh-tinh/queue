@@ -16,6 +16,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/robfig/cron/v3 v3.0.0 // indirect
 	go.mongodb.org/mongo-driver v1.16.1 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 )

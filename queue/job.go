@@ -43,6 +43,19 @@ func (queue *Queue) newJob(id string, data interface{}) *Job {
 	return job
 }
 
+func (queue *Queue) delayJob(id string, data interface{}) *Job {
+	job := &Job{
+		Id:            id,
+		Data:          data,
+		Status:        DelayedStatus,
+		Stacktrace:    []string{},
+		queue:         queue,
+		RetryFailures: queue.RetryFailures,
+	}
+
+	return job
+}
+
 type Callback func() error
 
 func (job *Job) Process(cb Callback) {
@@ -76,4 +89,8 @@ func (job *Job) Process(cb Callback) {
 
 func (job *Job) IsReady() bool {
 	return job.Status == WaitStatus || job.Status == ActiveStatus
+}
+
+func (job *Job) IsFinished() bool {
+	return job.Status == FailedStatus || job.Status == CompletedStatus
 }
