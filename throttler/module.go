@@ -20,7 +20,7 @@ type Options struct {
 	SkipRoutes []string
 }
 
-func ForRoot(opt *Options) core.Module {
+func Register(opt *Options) core.Module {
 	return func(module *core.DynamicModule) *core.DynamicModule {
 		throttlerModule := module.New(core.NewModuleOptions{})
 		throttlerModule.NewProvider(New(opt), core.Provide(opt.Name))

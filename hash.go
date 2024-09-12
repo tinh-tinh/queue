@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/tinh-tinh/ioredis/common"
 )
 
 type Hash[M any] struct {
 	Name  string
-	redis *Redis
+	redis common.Redis
 }
 
-func NewHash[M any](name string, r *Redis) *Hash[M] {
+func NewHash[M any](name string, r common.Redis) *Hash[M] {
 	return &Hash[M]{
 		Name:  name,
 		redis: r,
@@ -19,7 +21,7 @@ func NewHash[M any](name string, r *Redis) *Hash[M] {
 }
 
 func (h *Hash[M]) Expire(time time.Duration) *Hash[M] {
-	result := h.redis.client.Expire(h.redis.ctx, h.Name, time)
+	result := h.redis.GetClient().Expire(h.redis.GetCtx(), h.Name, time)
 	fmt.Println(result)
 	return h
 }
@@ -30,12 +32,12 @@ func (h *Hash[M]) Upsert(key string, data *M) error {
 		return err
 	}
 
-	return h.redis.client.HSet(h.redis.ctx, h.Name, key, string(val)).Err()
+	return h.redis.GetClient().HSet(h.redis.GetCtx(), h.Name, key, string(val)).Err()
 }
 
 func (h *Hash[M]) FindMany() ([]*M, error) {
 	var data []*M
-	mapper, err := h.redis.client.HGetAll(h.redis.ctx, h.Name).Result()
+	mapper, err := h.redis.GetClient().HGetAll(h.redis.GetCtx(), h.Name).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +53,7 @@ func (h *Hash[M]) FindMany() ([]*M, error) {
 
 func (h *Hash[M]) FindByKey(key string) (*M, error) {
 	var data M
-	val, err := h.redis.client.HGet(h.redis.ctx, h.Name, key).Result()
+	val, err := h.redis.GetClient().HGet(h.redis.GetCtx(), h.Name, key).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -61,5 +63,5 @@ func (h *Hash[M]) FindByKey(key string) (*M, error) {
 }
 
 func (h *Hash[M]) Delete(key string) error {
-	return h.redis.client.HDel(h.redis.ctx, h.Name, key).Err()
+	return h.redis.GetClient().HDel(h.redis.GetCtx(), h.Name, key).Err()
 }

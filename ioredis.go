@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/tinh-tinh/ioredis/common"
 )
 
 type Redis struct {
@@ -11,7 +12,7 @@ type Redis struct {
 	client *redis.Client
 }
 
-func New(opt *redis.Options) *Redis {
+func New(opt *redis.Options) common.Redis {
 	return &Redis{
 		ctx:    context.Background(),
 		client: redis.NewClient(opt),
