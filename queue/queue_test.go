@@ -17,7 +17,7 @@ func Test_Queue(t *testing.T) {
 			Password: "",
 			DB:       0,
 		},
-		Workers:       2,
+		Workers:       6,
 		RetryFailures: 3,
 	})
 
