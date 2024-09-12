@@ -28,3 +28,9 @@ func Register(name string, opt *QueueOption) core.Module {
 		return queueModule
 	}
 }
+
+func InjectQueue(module *core.DynamicModule, name string) *Queue {
+	queue := module.Ref(getQueueName(name)).(*Queue)
+
+	return queue
+}
