@@ -13,19 +13,19 @@ import (
 )
 
 func Test_Queue(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
 	userQueue := New("user", &QueueOption{
-		Redis: &redis.Options{
-			Addr:     "localhost:6379",
-			Password: "",
-			DB:       0,
-		},
 		Workers:       6,
 		RetryFailures: 3,
 		Limiter: &RateLimiter{
 			Max:      3,
 			Duration: time.Millisecond,
 		},
-	})
+	}, rdb)
 
 	fmt.Println(userQueue)
 	t.Parallel()
@@ -79,12 +79,12 @@ func Test_Queue(t *testing.T) {
 }
 
 func Test_SchedulerQueue(t *testing.T) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
 	userQueue := New("user", &QueueOption{
-		Redis: &redis.Options{
-			Addr:     "localhost:6379",
-			Password: "",
-			DB:       0,
-		},
 		Workers:       6,
 		RetryFailures: 3,
 		Limiter: &RateLimiter{
@@ -92,7 +92,7 @@ func Test_SchedulerQueue(t *testing.T) {
 			Duration: time.Second,
 		},
 		Pattern: "@every 0h0m1s",
-	})
+	}, rdb)
 
 	t.Parallel()
 
