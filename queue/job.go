@@ -2,9 +2,8 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type JobStatus string
@@ -61,13 +60,13 @@ type Callback func() error
 func (job *Job) Process(cb Callback) {
 	job.Status = ActiveStatus
 	job.ProcessedOn = time.Now()
-	logrus.Infof("⌛ Running job %s progress", job.Id)
+	fmt.Printf("⌛ Running job %s progress\n", job.Id)
 	println()
 	err := cb()
 	if err == nil {
 		job.FinishedOn = time.Now()
 		job.Status = CompletedStatus
-		logrus.Infof("Job %s done ✅ in %dms", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
+		fmt.Printf("Job %s done ✅ in %dms\n", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
 		println()
 	} else {
 		job.FailedReason = err.Error()
@@ -78,10 +77,10 @@ func (job *Job) Process(cb Callback) {
 		if job.RetryFailures > 0 {
 			job.Status = DelayedStatus
 			job.RetryFailures--
-			logrus.Warnf("Add job %s for retry (%d remains) 🕛", job.Id, job.RetryFailures)
+			fmt.Printf("Add job %s for retry (%d remains) 🕛\n", job.Id, job.RetryFailures)
 			println()
 		} else {
-			logrus.Errorf("Failed job %s ❌", job.Id)
+			fmt.Printf("Failed job %s ❌\n", job.Id)
 			println()
 		}
 	}

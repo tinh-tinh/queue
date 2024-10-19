@@ -23,8 +23,12 @@ type Options struct {
 func Register(opt *Options) core.Module {
 	return func(module *core.DynamicModule) *core.DynamicModule {
 		throttlerModule := module.New(core.NewModuleOptions{})
-		throttlerModule.NewProvider(New(opt), core.Provide(opt.Name))
-		throttlerModule.Export(core.Provide(opt.Name))
+		provideName := core.Provide(opt.Name)
+		throttlerModule.NewProvider(core.ProviderOptions{
+			Name:  provideName,
+			Value: New(opt),
+		})
+		throttlerModule.Export(provideName)
 
 		return throttlerModule
 	}

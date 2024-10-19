@@ -4,15 +4,17 @@ import (
 	"context"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/tinh-tinh/ioredis/common"
+	"github.com/tinh-tinh/tinhtinh/core"
 )
+
+const IO_REDIS core.Provide = "IO_REDIS"
 
 type Redis struct {
 	ctx    context.Context
 	client *redis.Client
 }
 
-func New(opt *redis.Options) common.Redis {
+func New(opt *redis.Options) *Redis {
 	return &Redis{
 		ctx:    context.Background(),
 		client: redis.NewClient(opt),

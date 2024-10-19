@@ -4,16 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/tinh-tinh/ioredis/common"
 )
 
 type Hash[M any] struct {
 	Name  string
-	redis common.Redis
+	redis *Redis
 }
 
-func NewHash[M any](name string, r common.Redis) *Hash[M] {
+func NewHash[M any](name string, r *Redis) *Hash[M] {
 	return &Hash[M]{
 		Name:  name,
 		redis: r,
