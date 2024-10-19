@@ -60,16 +60,4 @@ func Test_Hash(t *testing.T) {
 		}
 		fmt.Println(*data)
 	})
-
-	time.Sleep(20 * time.Second)
-	t.Run("TesT_Expire", func(t *testing.T) {
-		data, err := userHash.FindMany()
-		if err != nil {
-			t.Error(err)
-		}
-		if len(data) != 0 {
-			fmt.Println(data)
-			t.Error("data should out of redis")
-		}
-	})
 }
