@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -13,8 +14,9 @@ import (
 )
 
 func Test_Queue(t *testing.T) {
+	addr := os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     addr,
 		Password: "",
 		DB:       0,
 	})
@@ -79,8 +81,9 @@ func Test_Queue(t *testing.T) {
 }
 
 func Test_SchedulerQueue(t *testing.T) {
+	addr := os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     addr,
 		Password: "",
 		DB:       0,
 	})

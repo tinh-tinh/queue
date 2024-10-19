@@ -2,6 +2,7 @@ package ioredis
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -14,8 +15,9 @@ type User struct {
 }
 
 func Test_Hash(t *testing.T) {
+	addr := os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")
 	rdb := New(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     addr,
 		Password: "",
 		DB:       0,
 	})
