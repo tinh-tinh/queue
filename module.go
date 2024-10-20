@@ -27,7 +27,7 @@ func InjectRedis(module *core.DynamicModule) *Redis {
 func InjectHash[M any](module *core.DynamicModule, name string) *Hash[M] {
 	hash := module.Ref(core.Provide(getHashName(name)))
 	if hash == nil {
-		redis := module.Ref(IO_REDIS).(*Redis)
+		redis := InjectRedis(module)
 		hash = NewHash[M](name, redis)
 		module.NewProvider(core.ProviderOptions{
 			Name:  getHashName(name),
