@@ -42,7 +42,10 @@ func (h *Hash[M]) FindMany() ([]*M, error) {
 
 	for _, v := range mapper {
 		var item *M
-		json.Unmarshal([]byte(v), &item)
+		err := json.Unmarshal([]byte(v), &item)
+		if err != nil {
+			return nil, err
+		}
 		data = append(data, item)
 	}
 
@@ -56,7 +59,10 @@ func (h *Hash[M]) FindByKey(key string) (*M, error) {
 		return nil, err
 	}
 
-	json.Unmarshal([]byte(val), &data)
+	err = json.Unmarshal([]byte(val), &data)
+	if err != nil {
+		return nil, err
+	}
 	return &data, nil
 }
 
