@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"slices"
 	"strconv"
 	"sync"
@@ -98,7 +99,10 @@ func (q *Queue) Process(jobFnc JobFnc) {
 		// 	// 	panic("unlock failed")
 		// 	// }
 		// })
-		q.scheduler.AddFunc(q.cronPattern, func() { fmt.Println("Every second") })
+		_, err := q.scheduler.AddFunc(q.cronPattern, func() { fmt.Println("Every second") })
+		if err != nil {
+			log.Fatalf("failed to add job: %v\n", err)
+		}
 		q.scheduler.Start()
 	}
 }
