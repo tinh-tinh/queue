@@ -32,3 +32,7 @@ func (r *Redis) SetCtx(ctx context.Context) {
 func (r *Redis) GetClient() *redis.Client {
 	return r.client
 }
+
+func (r *Redis) Ping() bool {
+	return r.client.Ping(r.ctx).Err() == nil
+}

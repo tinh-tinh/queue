@@ -2,11 +2,11 @@ package ioredis
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 )
 
 type User struct {
@@ -15,7 +15,7 @@ type User struct {
 }
 
 func Test_Hash(t *testing.T) {
-	addr := os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")
+	addr := "localhost:6379"
 	rdb := New(&redis.Options{
 		Addr:     addr,
 		Password: "",
@@ -36,28 +36,17 @@ func Test_Hash(t *testing.T) {
 	}
 
 	for i := 0; i < len(testcase); i++ {
-		t.Run("Test_Upsert", func(t *testing.T) {
-			key := fmt.Sprint(i + 1)
-			err := userHash.Upsert(key, &testcase[i])
-			if err != nil {
-				t.Error(err)
-			}
-		})
+		key := fmt.Sprint(i + 1)
+		err := userHash.Upsert(key, &testcase[i])
+		require.Nil(t, err)
 	}
 
-	t.Run("Test_FindMany", func(t *testing.T) {
-		data, err := userHash.FindMany()
-		if err != nil {
-			t.Error(err)
-		}
-		fmt.Println(data)
-	})
+	_, err := userHash.FindMany()
+	require.Nil(t, err)
 
-	t.Run("Test_FindONe", func(t *testing.T) {
-		data, err := userHash.FindByKey("1")
-		if err != nil {
-			t.Error(err)
-		}
-		fmt.Println(*data)
-	})
+	_, err = userHash.FindByKey("1")
+	require.Nil(t, err)
+
+	err = userHash.Delete("1")
+	require.Nil(t, err)
 }

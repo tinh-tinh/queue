@@ -3,18 +3,17 @@ package queue
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func Test_Queue(t *testing.T) {
-	addr := os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")
+	addr := "localhost:6379"
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: "",
@@ -29,7 +28,6 @@ func Test_Queue(t *testing.T) {
 		},
 	}, rdb)
 
-	fmt.Println(userQueue)
 	t.Parallel()
 
 	time.Sleep(time.Millisecond)
@@ -55,33 +53,25 @@ func Test_Queue(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	userQueue.AddJob("11", "value 11")
 
-	t.Run("TestCase", func(t *testing.T) {
-		userQueue.Process(func(job *Job) {
-			job.Process(func() error {
-				num, err := strconv.Atoi(job.Id)
-				if err != nil {
-					return err
-				}
-				if num%3 == 0 {
-					return errors.New("error by test")
-				}
+	userQueue.Process(func(job *Job) {
+		job.Process(func() error {
+			num, err := strconv.Atoi(job.Id)
+			require.Nil(t, err)
+			if num%3 == 0 {
+				return errors.New("error by test")
+			}
 
-				key, err := json.Marshal(job.Data)
-				if err != nil {
-					return err
-				}
-				_, err = HeaveTask(string(key))
-				if err != nil {
-					return err
-				}
-				return nil
-			})
+			key, err := json.Marshal(job.Data)
+			require.Nil(t, err)
+			_, err = HeaveTask(string(key))
+			require.Nil(t, err)
+			return nil
 		})
 	})
 }
 
 func Test_SchedulerQueue(t *testing.T) {
-	addr := os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT")
+	addr := "localhost:6379"
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: "",
@@ -121,27 +111,23 @@ func Test_SchedulerQueue(t *testing.T) {
 	userQueue.AddJob("10", "value 10")
 	time.Sleep(time.Millisecond)
 	userQueue.AddJob("11", "value 11")
-	t.Run("TestCase", func(t *testing.T) {
-		userQueue.Process(func(job *Job) {
-			job.Process(func() error {
-				num, err := strconv.Atoi(job.Id)
-				if err != nil {
-					return err
-				}
-				if num%3 == 0 {
-					return errors.New("error by test")
-				}
 
-				key, err := json.Marshal(job.Data)
-				if err != nil {
-					return err
-				}
-				_, err = HeaveTask(string(key))
-				if err != nil {
-					return err
-				}
-				return nil
-			})
+	userQueue.Process(func(job *Job) {
+		job.Process(func() error {
+			num, err := strconv.Atoi(job.Id)
+			require.Nil(t, err)
+
+			if num%3 == 0 {
+				return errors.New("error by test")
+			}
+
+			key, err := json.Marshal(job.Data)
+			require.Nil(t, err)
+
+			_, err = HeaveTask(string(key))
+			require.Nil(t, err)
+
+			return nil
 		})
 	})
 }
