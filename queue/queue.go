@@ -35,13 +35,15 @@ type RateLimiter struct {
 }
 
 type QueueOption struct {
+	Connect       *redis.Options
 	Workers       int
 	RetryFailures int
 	Limiter       *RateLimiter
 	Pattern       string
 }
 
-func New(name string, opt *QueueOption, client *redis.Client) *Queue {
+func New(name string, opt *QueueOption) *Queue {
+	client := redis.NewClient(opt.Connect)
 	pool := goredis.NewPool(client)
 	rs := redsync.New(pool)
 
