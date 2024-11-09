@@ -1,4 +1,4 @@
-module github.com/tinh-tinh/ioredis
+module github.com/tinh-tinh/queue
 
 go 1.22.0
 

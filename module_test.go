@@ -1,4 +1,4 @@
-package ioredis
+package queue
 
 import (
 	"net/http/httptest"

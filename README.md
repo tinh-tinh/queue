@@ -9,7 +9,7 @@ Package Redis for Tinh Tinh
 ## Install 
 
 ```bash
-go get -u github.com/tinh-tinh/ioredis
+go get -u github.com/tinh-tinh/queue
 ```
 
 ## Features
