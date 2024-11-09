@@ -1,4 +1,4 @@
-package ioredis
+package queue
 
 import (
 	"context"
