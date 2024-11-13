@@ -3,34 +3,41 @@ package queue
 import (
 	"fmt"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/tinh-tinh/tinhtinh/core"
 )
 
-const QUEUE core.Provide = "QUEUE"
-
-func getQueueName(name string) core.Provide {
-	return core.Provide(fmt.Sprintf("%sQueue", name))
-}
-
-func Register(name string, opt *QueueOption) core.Module {
+func ForRoot(opt *redis.Options) core.Module {
 	return func(module *core.DynamicModule) *core.DynamicModule {
-		queueModule := module.New(core.NewModuleOptions{})
-
-		queueModule.NewProvider(core.ProviderOptions{
-			Name:  getQueueName(name),
-			Value: New(name, opt),
+		redisModule := module.New(core.NewModuleOptions{})
+		redisModule.NewProvider(core.ProviderOptions{
+			Name:  IO_REDIS,
+			Value: New(opt),
 		})
-		queueModule.Export(getQueueName(name))
+		redisModule.Export(IO_REDIS)
 
-		return queueModule
+		return redisModule
 	}
 }
 
-func InjectQueue(module *core.DynamicModule, name string) *Queue {
-	queue, ok := module.Ref(getQueueName(name)).(*Queue)
-	if !ok {
-		return nil
-	}
+func InjectRedis(module *core.DynamicModule) *Redis {
+	return module.Ref(IO_REDIS).(*Redis)
+}
 
-	return queue
+func InjectHash[M any](module *core.DynamicModule, name string) *Hash[M] {
+	hash := module.Ref(core.Provide(getHashName(name)))
+	if hash == nil {
+		redis := InjectRedis(module)
+		hash = NewHash[M](name, redis)
+		module.NewProvider(core.ProviderOptions{
+			Name:  getHashName(name),
+			Value: hash,
+		})
+	}
+	return hash.(*Hash[M])
+}
+
+func getHashName(name string) core.Provide {
+	hashName := fmt.Sprintf("%sHash", name)
+	return core.Provide(hashName)
 }

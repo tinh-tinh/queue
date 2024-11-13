@@ -16,13 +16,10 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-type JobFnc func(job *Job)
-
 type Queue struct {
 	Name          string
 	client        *redis.Client
-	mutex         *redsync.Mutex
-	jobFnc        JobFnc
+	rs            *redsync.Redsync
 	jobs          []Job
 	RetryFailures int
 	workers       int
@@ -53,7 +50,7 @@ func New(name string, opt *QueueOption) *Queue {
 	queue := &Queue{
 		client:        client,
 		Name:          name,
-		mutex:         rs.NewMutex(name),
+		rs:            rs,
 		workers:       opt.Workers,
 		RetryFailures: opt.RetryFailures,
 		limiter:       opt.Limiter,
@@ -78,32 +75,32 @@ func (q *Queue) AddJob(id string, data interface{}) {
 		job = q.newJob(id, data)
 	}
 	q.jobs = append(q.jobs, *job)
-	q.Run()
 }
 
-type AddJobOptions struct {
-	Id   string
-	Data interface{}
-}
-
-func (q *Queue) BulkAddJob(options []AddJobOptions) {
-	for _, option := range options {
-		var job *Job
-		if q.IsLimit() {
-			fmt.Printf("Add job %s to delay\n", option.Id)
-			job = q.delayJob(option.Id, option.Data)
-		} else {
-			fmt.Printf("Add job %s to waiting\n", option.Id)
-			job = q.newJob(option.Id, option.Data)
-		}
-		q.jobs = append(q.jobs, *job)
-	}
-	q.Run()
-}
+type JobFnc func(job *Job)
 
 func (q *Queue) Process(jobFnc JobFnc) {
-	q.jobFnc = jobFnc
-	if q.scheduler != nil {
+	if q.scheduler == nil {
+		mutex := q.rs.NewMutex(q.Name)
+		if err := mutex.Lock(); err != nil {
+			panic(err)
+		}
+		q.Run(jobFnc)
+		if ok, err := mutex.Unlock(); !ok || err != nil {
+			panic("unlock failed")
+		}
+	} else {
+		fmt.Println(q.cronPattern)
+		// q.scheduler.AddFunc(q.cronPattern, func() {
+		// 	// mutex := q.rs.NewMutex(q.Name)
+		// 	// if err := mutex.Lock(); err != nil {
+		// 	// 	panic(err)
+		// 	// }
+		// 	q.Run(jobFnc)
+		// 	// if ok, err := mutex.Unlock(); !ok || err != nil {
+		// 	// 	panic("unlock failed")
+		// 	// }
+		// })
 		_, err := q.scheduler.AddFunc(q.cronPattern, func() { fmt.Println("Every second") })
 		if err != nil {
 			log.Fatalf("failed to add job: %v\n", err)
@@ -112,11 +109,7 @@ func (q *Queue) Process(jobFnc JobFnc) {
 	}
 }
 
-func (q *Queue) Run() {
-	// Lock the mutex
-	// if err := q.mutex.Lock(); err != nil {
-	// 	fmt.Println(err)
-	// }
+func (q *Queue) Run(jobFnc JobFnc) {
 	fmt.Printf("Running on %s\n", time.Now().String())
 	execJobs := []*Job{}
 	for i := 0; i < len(q.jobs); i++ {
@@ -134,27 +127,17 @@ func (q *Queue) Run() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				q.jobFnc(job)
+				jobFnc(job)
 			}()
 		}
 		wg.Wait()
-		execJobs = execJobs[min:]
+		_, execJobs = execJobs[0], execJobs[min:]
 	}
 
-	// Unlock the mutex
-	// if ok, err := q.mutex.Unlock(); !ok || err != nil {
-	// 	fmt.Println(err)
-	// }
-
-	q.Retry()
+	q.Retry(jobFnc)
 }
 
-func (q *Queue) Retry() {
-	// Lock the mutex
-	// if err := q.mutex.Lock(); err != nil {
-	// 	panic(err)
-	// }
-
+func (q *Queue) Retry(jobFnc JobFnc) {
 	execJobs := []*Job{}
 	// For retry failures
 	for i := 0; i < len(q.jobs); i++ {
@@ -172,19 +155,14 @@ func (q *Queue) Retry() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				q.jobFnc(job)
+				jobFnc(job)
 				if job.IsFinished() {
-					execJobs = append(execJobs[:i], execJobs[i+1:]...)
+					_, execJobs = execJobs[0], execJobs[1:]
 				}
 			}()
 		}
 		wg.Wait()
 	}
-
-	// Unlock the mutex
-	// if ok, err := q.mutex.Unlock(); !ok || err != nil {
-	// 	panic("unlock failed")
-	// }
 }
 
 func (q *Queue) CountJobs(status JobStatus) int {
@@ -201,6 +179,7 @@ func (q *Queue) CountJobs(status JobStatus) int {
 func (q *Queue) Remove(key string) {
 	findIdx := slices.IndexFunc(q.jobs, func(j Job) bool { return j.Id == key })
 	if findIdx != -1 {
+		fmt.Print(findIdx)
 		q.jobs = append(q.jobs[:findIdx], q.jobs[findIdx+1:]...)
 	}
 }
