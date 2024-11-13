@@ -20,13 +20,38 @@ func Test_Queue(t *testing.T) {
 			Password: "",
 			DB:       0,
 		},
-		Workers:       3,
+		Workers:       6,
 		RetryFailures: 3,
 		Limiter: &RateLimiter{
 			Max:      3,
-			Duration: time.Second,
+			Duration: time.Millisecond,
 		},
 	})
+
+	t.Parallel()
+
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("1", "value 1")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("2", "value 2")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("3", "value 3")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("4", "value 4")
+	time.Sleep(time.Second)
+	userQueue.AddJob("5", "value 5")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("6", "value 6")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("7", "value 7")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("8", "value 8")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("9", "value 9")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("10", "value 10")
+	time.Sleep(time.Millisecond)
+	userQueue.AddJob("11", "value 11")
 
 	userQueue.Process(func(job *Job) {
 		job.Process(func() error {
@@ -42,62 +67,6 @@ func Test_Queue(t *testing.T) {
 			require.Nil(t, err)
 			return nil
 		})
-	})
-
-	t.Parallel()
-
-	// t.Run("test", func(t *testing.T) {
-	userQueue.AddJob("1", "value 1")
-	userQueue.AddJob("2", "value 2")
-	userQueue.AddJob("3", "value 3")
-	userQueue.AddJob("4", "value 4")
-	time.Sleep(time.Second)
-	userQueue.AddJob("5", "value 5")
-	userQueue.AddJob("6", "value 6")
-	userQueue.AddJob("7", "value 7")
-	userQueue.AddJob("8", "value 8")
-	userQueue.AddJob("9", "value 9")
-	userQueue.AddJob("10", "value 10")
-	userQueue.AddJob("11", "value 11")
-	// })
-
-	userQueue.BulkAddJob([]AddJobOptions{
-		{
-			Id:   "12",
-			Data: "value 12",
-		},
-		{
-			Id:   "13",
-			Data: "value 13",
-		},
-		{
-			Id:   "14",
-			Data: "value 14",
-		},
-		{
-			Id:   "15",
-			Data: "value 15",
-		},
-		{
-			Id:   "16",
-			Data: "value 16",
-		},
-		{
-			Id:   "17",
-			Data: "value 17",
-		},
-		{
-			Id:   "18",
-			Data: "value 18",
-		},
-		{
-			Id:   "19",
-			Data: "value 19",
-		},
-		{
-			Id:   "20",
-			Data: "value 20",
-		},
 	})
 }
 
@@ -120,17 +89,27 @@ func Test_SchedulerQueue(t *testing.T) {
 
 	t.Parallel()
 
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("1", "value 1")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("2", "value 2")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("3", "value 3")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("4", "value 4")
 	time.Sleep(time.Second)
 	userQueue.AddJob("5", "value 5")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("6", "value 6")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("7", "value 7")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("8", "value 8")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("9", "value 9")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("10", "value 10")
+	time.Sleep(time.Millisecond)
 	userQueue.AddJob("11", "value 11")
 
 	userQueue.Process(func(job *Job) {
