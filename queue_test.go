@@ -118,21 +118,6 @@ func Test_SchedulerQueue(t *testing.T) {
 		Pattern: "@every 0h0m1s",
 	})
 
-	t.Parallel()
-
-	userQueue.AddJob("1", "value 1")
-	userQueue.AddJob("2", "value 2")
-	userQueue.AddJob("3", "value 3")
-	userQueue.AddJob("4", "value 4")
-	time.Sleep(time.Second)
-	userQueue.AddJob("5", "value 5")
-	userQueue.AddJob("6", "value 6")
-	userQueue.AddJob("7", "value 7")
-	userQueue.AddJob("8", "value 8")
-	userQueue.AddJob("9", "value 9")
-	userQueue.AddJob("10", "value 10")
-	userQueue.AddJob("11", "value 11")
-
 	userQueue.Process(func(job *Job) {
 		job.Process(func() error {
 			num, err := strconv.Atoi(job.Id)
@@ -151,6 +136,21 @@ func Test_SchedulerQueue(t *testing.T) {
 			return nil
 		})
 	})
+
+	t.Parallel()
+
+	userQueue.AddJob("1", "value 1")
+	userQueue.AddJob("2", "value 2")
+	userQueue.AddJob("3", "value 3")
+	userQueue.AddJob("4", "value 4")
+	time.Sleep(time.Second)
+	userQueue.AddJob("5", "value 5")
+	userQueue.AddJob("6", "value 6")
+	userQueue.AddJob("7", "value 7")
+	userQueue.AddJob("8", "value 8")
+	userQueue.AddJob("9", "value 9")
+	userQueue.AddJob("10", "value 10")
+	userQueue.AddJob("11", "value 11")
 }
 
 func HeaveTask(key string) (string, error) {
