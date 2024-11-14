@@ -45,6 +45,17 @@ type QueueOption struct {
 	Pattern       string
 }
 
+// New creates a new queue with the given name and options. The name is used to
+// identify the queue in Redis, and the options are used to configure the queue
+// behavior. The options are as follows:
+//
+// - Connect: the Redis connection options
+// - Workers: the number of workers to run concurrently
+// - RetryFailures: the number of times to retry a failed job
+// - Limiter: the rate limiter options
+// - Pattern: the cron pattern to use for scheduling jobs
+//
+// The returned queue is ready to use.
 func New(name string, opt *QueueOption) *Queue {
 	client := redis.NewClient(opt.Connect)
 	pool := goredis.NewPool(client)
@@ -68,6 +79,9 @@ func New(name string, opt *QueueOption) *Queue {
 	return queue
 }
 
+// AddJob adds a new job to the queue. If the queue is currently rate limited, the
+// job is delayed. Otherwise, the job is added to the waiting list and the queue
+// is run.
 func (q *Queue) AddJob(id string, data interface{}) {
 	var job *Job
 	if q.IsLimit() {
@@ -86,6 +100,9 @@ type AddJobOptions struct {
 	Data interface{}
 }
 
+// BulkAddJob adds multiple jobs to the queue at once. If the queue is currently
+// rate limited, the jobs are delayed. Otherwise, the jobs are added to the
+// waiting list and the queue is run.
 func (q *Queue) BulkAddJob(options []AddJobOptions) {
 	for _, option := range options {
 		var job *Job
@@ -101,6 +118,9 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 	q.Run()
 }
 
+// Process sets the callback for the queue to process jobs. If the queue has a
+// scheduler, it will be started with the given cron pattern. Otherwise, the
+// callback is simply stored.
 func (q *Queue) Process(jobFnc JobFnc) {
 	q.jobFnc = jobFnc
 	if q.scheduler != nil {
@@ -112,6 +132,10 @@ func (q *Queue) Process(jobFnc JobFnc) {
 	}
 }
 
+// Run runs all ready jobs in the queue. It locks the mutex, runs all ready jobs
+// in parallel, and then unlocks the mutex. If the queue has a scheduler, it
+// will be started with the given cron pattern. Otherwise, the callback is simply
+// stored.
 func (q *Queue) Run() {
 	// Lock the mutex
 	// if err := q.mutex.Lock(); err != nil {
@@ -148,6 +172,11 @@ func (q *Queue) Run() {
 
 	q.Retry()
 }
+
+// Retry processes all jobs that are in the DelayedStatus. It locks the mutex,
+// collects all delayed jobs, and then processes them concurrently up to the
+// number of available workers. After processing, it checks if the job is finished
+// and removes it from the list of jobs to retry. Finally, it unlocks the mutex.
 
 func (q *Queue) Retry() {
 	// Lock the mutex
@@ -187,6 +216,9 @@ func (q *Queue) Retry() {
 	// }
 }
 
+// CountJobs returns the number of jobs in the queue that have the given status.
+//
+// This can be used to monitor the queue, and to test the queue's behavior.
 func (q *Queue) CountJobs(status JobStatus) int {
 	count := 0
 	for i := 0; i < len(q.jobs); i++ {
@@ -198,6 +230,9 @@ func (q *Queue) CountJobs(status JobStatus) int {
 	return count
 }
 
+// Remove removes the job with the given key from the queue. It uses a linear
+// search, so it has a time complexity of O(n), where n is the number of jobs in
+// the queue.
 func (q *Queue) Remove(key string) {
 	findIdx := slices.IndexFunc(q.jobs, func(j Job) bool { return j.Id == key })
 	if findIdx != -1 {
@@ -212,6 +247,12 @@ func Min(a int, b int) int {
 	return b
 }
 
+// IsLimit returns true if the number of jobs in the queue has reached the
+// maximum value set in the RateLimiter. It checks the current value of the
+// counter in Redis and returns true if it is greater than or equal to the
+// maximum value. If the counter does not exist or is less than the maximum,
+// it increments the counter and returns false. If the increment fails, it
+// panics.
 func (q *Queue) IsLimit() bool {
 	if q.limiter == nil {
 		return false

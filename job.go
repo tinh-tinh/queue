@@ -29,6 +29,8 @@ type Job struct {
 	RetryFailures int
 }
 
+// newJob creates a new job with the given id and data. It sets the status to WaitStatus
+// and sets the RetryFailures to the RetryFailures of the Queue.
 func (queue *Queue) newJob(id string, data interface{}) *Job {
 	job := &Job{
 		Id:            id,
@@ -42,6 +44,8 @@ func (queue *Queue) newJob(id string, data interface{}) *Job {
 	return job
 }
 
+// delayJob creates a new job with the given id and data, and sets its status to
+// DelayedStatus.
 func (queue *Queue) delayJob(id string, data interface{}) *Job {
 	job := &Job{
 		Id:            id,
@@ -57,6 +61,9 @@ func (queue *Queue) delayJob(id string, data interface{}) *Job {
 
 type Callback func() error
 
+// Process runs the given callback and updates the job's status accordingly. It
+// also measures and logs the execution time. If the callback returns an error,
+// the job is either retried or marked as failed.
 func (job *Job) Process(cb Callback) {
 	job.Status = ActiveStatus
 	job.ProcessedOn = time.Now()
@@ -86,6 +93,9 @@ func (job *Job) Process(cb Callback) {
 	}
 }
 
+// IsReady returns true if the job is ready to be processed. If the job uses a
+// scheduler, it will always be ready. Otherwise, the job is ready if it is
+// waiting or active.
 func (job *Job) IsReady() bool {
 	if job.queue.scheduler == nil {
 		return job.Status == WaitStatus || job.Status == ActiveStatus
@@ -93,6 +103,7 @@ func (job *Job) IsReady() bool {
 	return true
 }
 
+// IsFinished returns true if the job has finished, either successfully or with an error.
 func (job *Job) IsFinished() bool {
 	return job.Status == FailedStatus || job.Status == CompletedStatus
 }
