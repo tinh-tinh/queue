@@ -104,7 +104,7 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 func (q *Queue) Process(jobFnc JobFnc) {
 	q.jobFnc = jobFnc
 	if q.scheduler != nil {
-		_, err := q.scheduler.AddFunc(q.cronPattern, func() { fmt.Println("Every second") })
+		_, err := q.scheduler.AddFunc(q.cronPattern, func() { q.Run() })
 		if err != nil {
 			log.Fatalf("failed to add job: %v\n", err)
 		}
