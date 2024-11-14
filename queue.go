@@ -37,12 +37,12 @@ type RateLimiter struct {
 	Duration time.Duration
 }
 
-type QueueOption struct {
+type Options struct {
 	Connect       *redis.Options
 	Workers       int
 	RetryFailures int
-	Limiter       *RateLimiter
-	Pattern       string
+	// Limiter       *RateLimiter
+	Pattern string
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -56,7 +56,7 @@ type QueueOption struct {
 // - Pattern: the cron pattern to use for scheduling jobs
 //
 // The returned queue is ready to use.
-func New(name string, opt *QueueOption) *Queue {
+func New(name string, opt *Options) *Queue {
 	client := redis.NewClient(opt.Connect)
 	pool := goredis.NewPool(client)
 	rs := redsync.New(pool)
@@ -67,8 +67,8 @@ func New(name string, opt *QueueOption) *Queue {
 		mutex:         rs.NewMutex(name),
 		workers:       opt.Workers,
 		RetryFailures: opt.RetryFailures,
-		limiter:       opt.Limiter,
-		ctx:           context.Background(),
+		// limiter:       opt.Limiter,
+		ctx: context.Background(),
 	}
 
 	if opt.Pattern != "" {
@@ -138,9 +138,10 @@ func (q *Queue) Process(jobFnc JobFnc) {
 // stored.
 func (q *Queue) Run() {
 	// Lock the mutex
-	// if err := q.mutex.Lock(); err != nil {
-	// 	fmt.Println(err)
-	// }
+	if err := q.mutex.Lock(); err != nil {
+		fmt.Println(err)
+		return
+	}
 	fmt.Printf("Running on %s\n", time.Now().String())
 	execJobs := []*Job{}
 	for i := 0; i < len(q.jobs); i++ {
@@ -165,12 +166,11 @@ func (q *Queue) Run() {
 		execJobs = execJobs[min:]
 	}
 
-	// Unlock the mutex
-	// if ok, err := q.mutex.Unlock(); !ok || err != nil {
-	// 	fmt.Println(err)
-	// }
-
 	q.Retry()
+	// Unlock the mutex
+	if ok, err := q.mutex.Unlock(); !ok || err != nil {
+		fmt.Println(err)
+	}
 }
 
 // Retry processes all jobs that are in the DelayedStatus. It locks the mutex,
@@ -179,11 +179,6 @@ func (q *Queue) Run() {
 // and removes it from the list of jobs to retry. Finally, it unlocks the mutex.
 
 func (q *Queue) Retry() {
-	// Lock the mutex
-	// if err := q.mutex.Lock(); err != nil {
-	// 	panic(err)
-	// }
-
 	execJobs := []*Job{}
 	// For retry failures
 	for i := 0; i < len(q.jobs); i++ {
@@ -196,6 +191,7 @@ func (q *Queue) Retry() {
 		min := Min(len(execJobs), q.workers)
 		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
+		var finishedJob []string
 		for i := 0; i < len(numJobs); i++ {
 			job := numJobs[i]
 			wg.Add(1)
@@ -203,17 +199,31 @@ func (q *Queue) Retry() {
 				defer wg.Done()
 				q.jobFnc(job)
 				if job.IsFinished() {
-					execJobs = append(execJobs[:i], execJobs[i+1:]...)
+					finishedJob = append(finishedJob, job.Id)
+					// if i+1 < len(execJobs) {
+					// 	execJobs = append(execJobs[:i], execJobs[i+1:]...)
+					// } else {
+					// 	execJobs = execJobs[:i]
+					// }
 				}
 			}()
 		}
 		wg.Wait()
+		if len(finishedJob) > 0 {
+			for _, id := range finishedJob {
+				if len(execJobs) == 1 && execJobs[0].Id == id {
+					execJobs = []*Job{}
+					break
+				}
+				idx := slices.IndexFunc(execJobs, func(j *Job) bool { return j.Id == id })
+				if idx != -1 {
+					execJobs = append(execJobs[:idx], execJobs[idx+1:]...)
+				} else {
+					break
+				}
+			}
+		}
 	}
-
-	// Unlock the mutex
-	// if ok, err := q.mutex.Unlock(); !ok || err != nil {
-	// 	panic("unlock failed")
-	// }
 }
 
 // CountJobs returns the number of jobs in the queue that have the given status.
