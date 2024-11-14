@@ -87,7 +87,10 @@ func (job *Job) Process(cb Callback) {
 }
 
 func (job *Job) IsReady() bool {
-	return job.Status == WaitStatus || job.Status == ActiveStatus
+	if job.queue.scheduler == nil {
+		return job.Status == WaitStatus || job.Status == ActiveStatus
+	}
+	return true
 }
 
 func (job *Job) IsFinished() bool {
