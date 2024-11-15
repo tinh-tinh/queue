@@ -289,10 +289,15 @@ func (q *Queue) IsLimit() bool {
 	}
 }
 
+// Pause stops the queue from running. When paused, the queue will not accept new
+// jobs and will not run any jobs in the queue. It will resume when Resume is
+// called.
 func (q *Queue) Pause() {
 	q.running = false
 }
 
+// Resume resumes the queue from a paused state. When resumed, the queue will
+// accept new jobs and run any jobs in the queue.
 func (q *Queue) Resume() {
 	q.running = true
 	q.Run()
