@@ -105,6 +105,13 @@ func Test_Queue(t *testing.T) {
 			Priority: 20,
 		},
 	})
+
+	userQueue.Pause()
+	userQueue.AddJob(queue.AddJobOptions{
+		Id:   "2",
+		Data: "value 2",
+	})
+	userQueue.Resume()
 }
 
 func Test_SchedulerQueue(t *testing.T) {

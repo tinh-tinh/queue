@@ -30,6 +30,7 @@ type Queue struct {
 	ctx           context.Context
 	scheduler     *cron.Cron
 	cronPattern   string
+	running       bool
 }
 
 type RateLimiter struct {
@@ -69,6 +70,7 @@ func New(name string, opt *Options) *Queue {
 		RetryFailures: opt.RetryFailures,
 		limiter:       opt.Limiter,
 		ctx:           context.Background(),
+		running:       true,
 	}
 
 	if opt.Pattern != "" {
@@ -141,6 +143,10 @@ func (q *Queue) Process(jobFnc JobFnc) {
 // will be started with the given cron pattern. Otherwise, the callback is simply
 // stored.
 func (q *Queue) Run() {
+	if !q.running {
+		fmt.Println("Queue is not running")
+		return
+	}
 	// Lock the mutex
 	if err := q.mutex.Lock(); err != nil {
 		fmt.Println(err)
@@ -204,11 +210,6 @@ func (q *Queue) Retry() {
 				q.jobFnc(job)
 				if job.IsFinished() {
 					finishedJob = append(finishedJob, job.Id)
-					// if i+1 < len(execJobs) {
-					// 	execJobs = append(execJobs[:i], execJobs[i+1:]...)
-					// } else {
-					// 	execJobs = execJobs[:i]
-					// }
 				}
 			}()
 		}
@@ -277,7 +278,6 @@ func (q *Queue) IsLimit() bool {
 	if attemps != "" && attempNum >= q.limiter.Max {
 		return true
 	} else {
-		fmt.Println(q.Name)
 		value, err := client.Incr(q.ctx, q.Name).Result()
 		if err != nil {
 			panic(err.Error())
@@ -287,4 +287,13 @@ func (q *Queue) IsLimit() bool {
 		}
 		return false
 	}
+}
+
+func (q *Queue) Pause() {
+	q.running = false
+}
+
+func (q *Queue) Resume() {
+	q.running = true
+	q.Run()
 }
