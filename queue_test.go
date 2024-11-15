@@ -160,3 +160,30 @@ func HeaveTask(key string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(key), 14)
 	return string(bytes), err
 }
+
+func Test_Crash(t *testing.T) {
+	addr := "localhost:6379"
+	userQueue := queue.New("crash", &queue.Options{
+		Connect: &redis.Options{
+			Addr:     addr,
+			Password: "",
+			DB:       0,
+		},
+		Workers:       3,
+		RetryFailures: 3,
+	})
+
+	userQueue.Process(func(job *queue.Job) {
+		job.Process(func() error {
+			panic("error by test")
+		})
+	})
+
+	t.Parallel()
+
+	// t.Run("test", func(t *testing.T) {
+	userQueue.AddJob(queue.AddJobOptions{
+		Id:   "1",
+		Data: "value 1",
+	})
+}
