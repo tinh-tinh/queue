@@ -71,6 +71,24 @@ func (job *Job) Process(cb Callback) {
 	job.ProcessedOn = time.Now()
 	fmt.Printf("⌛ Running job %s progress\n", job.Id)
 	println()
+	defer func() {
+		if r := recover(); r != nil {
+			job.FailedReason = fmt.Sprintf("%v", r)
+			job.Status = FailedStatus
+			// Store error
+			client := job.queue.client
+			client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+			if job.RetryFailures > 0 {
+				job.Status = DelayedStatus
+				job.RetryFailures--
+				fmt.Printf("Add job %s for retry (%d remains) 🕛\n", job.Id, job.RetryFailures)
+				println()
+			} else {
+				fmt.Printf("Failed job %s ❌\n", job.Id)
+				println()
+			}
+		}
+	}()
 	err := cb()
 	if err == nil {
 		job.FinishedOn = time.Now()
@@ -82,7 +100,7 @@ func (job *Job) Process(cb Callback) {
 		job.Status = FailedStatus
 		// Store error
 		client := job.queue.client
-		client.Set(context.Background(), job.Id, job.FailedReason, time.Hour)
+		client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
 		if job.RetryFailures > 0 {
 			job.Status = DelayedStatus
 			job.RetryFailures--
