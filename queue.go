@@ -2,7 +2,6 @@ package queue
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"slices"
@@ -41,8 +40,8 @@ type Options struct {
 	Connect       *redis.Options
 	Workers       int
 	RetryFailures int
-	// Limiter       *RateLimiter
-	Pattern string
+	Limiter       *RateLimiter
+	Pattern       string
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -67,8 +66,8 @@ func New(name string, opt *Options) *Queue {
 		mutex:         rs.NewMutex(name),
 		workers:       opt.Workers,
 		RetryFailures: opt.RetryFailures,
-		// limiter:       opt.Limiter,
-		ctx: context.Background(),
+		limiter:       opt.Limiter,
+		ctx:           context.Background(),
 	}
 
 	if opt.Pattern != "" {
@@ -273,9 +272,10 @@ func (q *Queue) IsLimit() bool {
 	if attemps != "" && attempNum >= q.limiter.Max {
 		return true
 	} else {
+		fmt.Println(q.Name)
 		value, err := client.Incr(q.ctx, q.Name).Result()
 		if err != nil {
-			panic(errors.New("fail to incr data"))
+			panic(err.Error())
 		}
 		if value == 1 {
 			client.Expire(q.ctx, q.Name, q.limiter.Duration)

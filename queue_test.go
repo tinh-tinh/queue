@@ -22,10 +22,10 @@ func Test_Queue(t *testing.T) {
 		},
 		Workers:       3,
 		RetryFailures: 3,
-		// Limiter: &RateLimiter{
-		// 	Max:      3,
-		// 	Duration: time.Second,
-		// },
+		Limiter: &RateLimiter{
+			Max:      3,
+			Duration: time.Second,
+		},
 	})
 
 	userQueue.Process(func(job *Job) {
@@ -103,7 +103,7 @@ func Test_Queue(t *testing.T) {
 
 func Test_SchedulerQueue(t *testing.T) {
 	addr := "localhost:6379"
-	userQueue := New("user", &Options{
+	userQueue := New("user_schedule", &Options{
 		Connect: &redis.Options{
 			Addr:     addr,
 			Password: "",
@@ -111,11 +111,7 @@ func Test_SchedulerQueue(t *testing.T) {
 		},
 		Workers:       6,
 		RetryFailures: 3,
-		// Limiter: &RateLimiter{
-		// 	Max:      3,
-		// 	Duration: time.Second,
-		// },
-		Pattern: "@every 0h0m1s",
+		Pattern:       "@every 0h0m1s",
 	})
 
 	userQueue.Process(func(job *Job) {
