@@ -31,10 +31,11 @@ type Job struct {
 
 // newJob creates a new job with the given id and data. It sets the status to WaitStatus
 // and sets the RetryFailures to the RetryFailures of the Queue.
-func (queue *Queue) newJob(id string, data interface{}) *Job {
+func (queue *Queue) newJob(opt AddJobOptions) *Job {
 	job := &Job{
-		Id:            id,
-		Data:          data,
+		Id:            opt.Id,
+		Data:          opt.Data,
+		Priority:      opt.Priority,
 		Status:        WaitStatus,
 		Stacktrace:    []string{},
 		queue:         queue,
@@ -46,10 +47,11 @@ func (queue *Queue) newJob(id string, data interface{}) *Job {
 
 // delayJob creates a new job with the given id and data, and sets its status to
 // DelayedStatus.
-func (queue *Queue) delayJob(id string, data interface{}) *Job {
+func (queue *Queue) delayJob(opt AddJobOptions) *Job {
 	job := &Job{
-		Id:            id,
-		Data:          data,
+		Id:            opt.Id,
+		Data:          opt.Data,
+		Priority:      opt.Priority,
 		Status:        DelayedStatus,
 		Stacktrace:    []string{},
 		queue:         queue,

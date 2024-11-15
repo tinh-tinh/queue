@@ -1,4 +1,4 @@
-package queue
+package queue_test
 
 import (
 	"encoding/json"
@@ -9,12 +9,13 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+	"github.com/tinh-tinh/queue"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func Test_Queue(t *testing.T) {
 	addr := "localhost:6379"
-	userQueue := New("user", &Options{
+	userQueue := queue.New("user", &queue.Options{
 		Connect: &redis.Options{
 			Addr:     addr,
 			Password: "",
@@ -22,13 +23,13 @@ func Test_Queue(t *testing.T) {
 		},
 		Workers:       3,
 		RetryFailures: 3,
-		Limiter: &RateLimiter{
+		Limiter: &queue.RateLimiter{
 			Max:      3,
 			Duration: time.Second,
 		},
 	})
 
-	userQueue.Process(func(job *Job) {
+	userQueue.Process(func(job *queue.Job) {
 		job.Process(func() error {
 			num, err := strconv.Atoi(job.Id)
 			require.Nil(t, err)
@@ -47,63 +48,68 @@ func Test_Queue(t *testing.T) {
 	t.Parallel()
 
 	// t.Run("test", func(t *testing.T) {
-	userQueue.AddJob("1", "value 1")
-	userQueue.AddJob("2", "value 2")
-	userQueue.AddJob("3", "value 3")
-	userQueue.AddJob("4", "value 4")
-	time.Sleep(time.Second)
-	userQueue.AddJob("5", "value 5")
-	userQueue.AddJob("6", "value 6")
-	userQueue.AddJob("7", "value 7")
-	userQueue.AddJob("8", "value 8")
-	userQueue.AddJob("9", "value 9")
-	userQueue.AddJob("10", "value 10")
-	userQueue.AddJob("11", "value 11")
-	// })
+	userQueue.AddJob(queue.AddJobOptions{
+		Id:   "1",
+		Data: "value 1",
+	})
 
-	userQueue.BulkAddJob([]AddJobOptions{
+	userQueue.BulkAddJob([]queue.AddJobOptions{
 		{
-			Id:   "12",
-			Data: "value 12",
+			Id:       "12",
+			Data:     "value 12",
+			Priority: 11,
 		},
 		{
-			Id:   "13",
-			Data: "value 13",
+			Id:       "13",
+			Data:     "value 13",
+			Priority: 12,
 		},
 		{
-			Id:   "14",
-			Data: "value 14",
+			Id:       "14",
+			Data:     "value 14",
+			Priority: 13,
 		},
 		{
-			Id:   "15",
-			Data: "value 15",
+			Id:       "15",
+			Data:     "value 15",
+			Priority: 14,
 		},
 		{
-			Id:   "16",
-			Data: "value 16",
+			Id:       "16",
+			Data:     "value 16",
+			Priority: 15,
 		},
 		{
-			Id:   "17",
-			Data: "value 17",
+			Id:       "17",
+			Data:     "value 17",
+			Priority: 16,
 		},
 		{
-			Id:   "18",
-			Data: "value 18",
+			Id:       "18",
+			Data:     "value 18",
+			Priority: 17,
 		},
 		{
-			Id:   "19",
-			Data: "value 19",
+			Id:       "19",
+			Data:     "value 19",
+			Priority: 18,
 		},
 		{
-			Id:   "20",
-			Data: "value 20",
+			Id:       "20",
+			Data:     "value 20",
+			Priority: 19,
+		},
+		{
+			Id:       "21",
+			Data:     "value 21",
+			Priority: 20,
 		},
 	})
 }
 
 func Test_SchedulerQueue(t *testing.T) {
 	addr := "localhost:6379"
-	userQueue := New("user_schedule", &Options{
+	userQueue := queue.New("user_schedule", &queue.Options{
 		Connect: &redis.Options{
 			Addr:     addr,
 			Password: "",
@@ -114,7 +120,7 @@ func Test_SchedulerQueue(t *testing.T) {
 		Pattern:       "@every 0h0m1s",
 	})
 
-	userQueue.Process(func(job *Job) {
+	userQueue.Process(func(job *queue.Job) {
 		job.Process(func() error {
 			num, err := strconv.Atoi(job.Id)
 			require.Nil(t, err)
@@ -135,7 +141,11 @@ func Test_SchedulerQueue(t *testing.T) {
 
 	t.Parallel()
 
-	userQueue.AddJob("1", "value 1")
+	userQueue.AddJob(queue.AddJobOptions{
+		Id:       "1",
+		Data:     "value 1",
+		Priority: 1,
+	})
 	time.Sleep(5 * time.Second)
 }
 

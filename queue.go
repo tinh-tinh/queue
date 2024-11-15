@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -81,39 +82,43 @@ func New(name string, opt *Options) *Queue {
 // AddJob adds a new job to the queue. If the queue is currently rate limited, the
 // job is delayed. Otherwise, the job is added to the waiting list and the queue
 // is run.
-func (q *Queue) AddJob(id string, data interface{}) {
+func (q *Queue) AddJob(opt AddJobOptions) {
 	var job *Job
 	if q.IsLimit() {
-		fmt.Printf("Add job %s to delay\n", id)
-		job = q.delayJob(id, data)
+		fmt.Printf("Add job %s to delay\n", opt.Id)
+		job = q.delayJob(opt)
 	} else {
-		fmt.Printf("Add job %s to waiting\n", id)
-		job = q.newJob(id, data)
+		fmt.Printf("Add job %s to waiting\n", opt.Id)
+		job = q.newJob(opt)
 	}
 	q.jobs = append(q.jobs, *job)
+	sort.SliceStable(q.jobs, func(i, j int) bool { return q.jobs[i].Priority > q.jobs[j].Priority })
 	q.Run()
 }
 
 type AddJobOptions struct {
-	Id   string
-	Data interface{}
+	Id       string
+	Data     interface{}
+	Priority int
 }
 
 // BulkAddJob adds multiple jobs to the queue at once. If the queue is currently
 // rate limited, the jobs are delayed. Otherwise, the jobs are added to the
 // waiting list and the queue is run.
 func (q *Queue) BulkAddJob(options []AddJobOptions) {
+	sort.SliceStable(options, func(i, j int) bool { return options[i].Priority > options[j].Priority })
 	for _, option := range options {
 		var job *Job
 		if q.IsLimit() {
 			fmt.Printf("Add job %s to delay\n", option.Id)
-			job = q.delayJob(option.Id, option.Data)
+			job = q.delayJob(option)
 		} else {
 			fmt.Printf("Add job %s to waiting\n", option.Id)
-			job = q.newJob(option.Id, option.Data)
+			job = q.newJob(option)
 		}
 		q.jobs = append(q.jobs, *job)
 	}
+	sort.SliceStable(q.jobs, func(i, j int) bool { return q.jobs[i].Priority > q.jobs[j].Priority })
 	q.Run()
 }
 
