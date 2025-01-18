@@ -1,4 +1,4 @@
-module github.com/tinh-tinh/queue
+module github.com/tinh-tinh/queue/v2
 
 go 1.22.0
 
@@ -7,7 +7,7 @@ require (
 	github.com/redis/go-redis/v9 v9.6.1
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/stretchr/testify v1.9.0
-	github.com/tinh-tinh/tinhtinh v1.4.0
+	github.com/tinh-tinh/tinhtinh/v2 v2.0.0-beta.7
 	golang.org/x/crypto v0.27.0
 )
 

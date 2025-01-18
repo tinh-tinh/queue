@@ -3,7 +3,7 @@ package queue
 import (
 	"fmt"
 
-	"github.com/tinh-tinh/tinhtinh/core"
+	"github.com/tinh-tinh/tinhtinh/v2/core"
 )
 
 const QUEUE core.Provide = "QUEUE"
@@ -18,8 +18,8 @@ func getQueueName(name string) core.Provide {
 // Register registers a new queue module with the given name and options. The
 // registered module creates a new queue with the given name and options, and
 // exports the queue under the name "<name>Queue".
-func Register(name string, opt *Options) core.Module {
-	return func(module *core.DynamicModule) *core.DynamicModule {
+func Register(name string, opt *Options) core.Modules {
+	return func(module core.Module) core.Module {
 		queueModule := module.New(core.NewModuleOptions{})
 
 		queueModule.NewProvider(core.ProviderOptions{
@@ -35,7 +35,7 @@ func Register(name string, opt *Options) core.Module {
 // InjectQueue injects a queue from the given module, using the given name. If the
 // module does not contain a queue with the given name, or if the queue is not of
 // type *Queue, InjectQueue returns nil.
-func Inject(module *core.DynamicModule, name string) *Queue {
+func Inject(module core.Module, name string) *Queue {
 	queue, ok := module.Ref(getQueueName(name)).(*Queue)
 	if !ok {
 		return nil

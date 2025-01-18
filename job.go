@@ -77,7 +77,10 @@ func (job *Job) Process(cb Callback) {
 			job.Status = FailedStatus
 			// Store error
 			client := job.queue.client
-			client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+			_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+			if err != nil {
+				fmt.Printf("Failed to store error: %s\n", err.Error())
+			}
 			if job.RetryFailures > 0 {
 				job.Status = DelayedStatus
 				job.RetryFailures--
@@ -100,7 +103,10 @@ func (job *Job) Process(cb Callback) {
 		job.Status = FailedStatus
 		// Store error
 		client := job.queue.client
-		client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+		_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+		if err != nil {
+			fmt.Printf("Failed to store error: %s\n", err.Error())
+		}
 		if job.RetryFailures > 0 {
 			job.Status = DelayedStatus
 			job.RetryFailures--
