@@ -6,13 +6,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"github.com/tinh-tinh/queue"
-	"github.com/tinh-tinh/tinhtinh/core"
+	"github.com/tinh-tinh/tinhtinh/v2/core"
 )
 
 func Test_Module(t *testing.T) {
 	addr := "localhost:6379"
 	module := core.NewModule(core.NewModuleOptions{
-		Imports: []core.Module{
+		Imports: []core.Modules{
 			queue.Register("jobs", &queue.Options{
 				Connect: &redis.Options{
 					Addr:     addr,
