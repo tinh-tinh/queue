@@ -1,4 +1,4 @@
-module github.com/tinh-tinh/queue
+module github.com/tinh-tinh/queue/v2
 
 go 1.22.0
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/tinh-tinh/queue"
+	"github.com/tinh-tinh/queue/v2"
 	"github.com/tinh-tinh/tinhtinh/v2/core"
 )
 
