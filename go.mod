@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/go-redsync/redsync/v4 v4.13.0
-	github.com/redis/go-redis/v9 v9.6.1
+	github.com/redis/go-redis/v9 v9.6.3
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/stretchr/testify v1.9.0
 	github.com/tinh-tinh/tinhtinh/v2 v2.0.0
