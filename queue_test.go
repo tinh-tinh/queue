@@ -187,3 +187,59 @@ func Test_Crash(t *testing.T) {
 		Data: "value 1",
 	})
 }
+
+func TestDisableLog(t *testing.T) {
+	addr := "localhost:6379"
+	userQueue := queue.New("disabled", &queue.Options{
+		Connect: &redis.Options{
+			Addr:     addr,
+			Password: "",
+			DB:       0,
+		},
+		Workers:       3,
+		RetryFailures: 3,
+		Logger:        queue.LoggerDisabled,
+	})
+
+	userQueue.Process(func(job *queue.Job) {
+		job.Process(func() error {
+			panic("error by test")
+		})
+	})
+
+	t.Parallel()
+
+	// t.Run("test", func(t *testing.T) {
+	userQueue.AddJob(queue.AddJobOptions{
+		Id:   "1",
+		Data: "value 1",
+	})
+}
+
+func Test_LoggerInfo(t *testing.T) {
+	addr := "localhost:6379"
+	userQueue := queue.New("info", &queue.Options{
+		Connect: &redis.Options{
+			Addr:     addr,
+			Password: "",
+			DB:       0,
+		},
+		Workers:       3,
+		RetryFailures: 3,
+		Logger:        queue.LoggerInfo,
+	})
+
+	userQueue.Process(func(job *queue.Job) {
+		job.Process(func() error {
+			panic("error by test")
+		})
+	})
+
+	t.Parallel()
+
+	// t.Run("test", func(t *testing.T) {
+	userQueue.AddJob(queue.AddJobOptions{
+		Id:   "1",
+		Data: "value 1",
+	})
+}
