@@ -2,7 +2,6 @@ package queue
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"slices"
 	"sort"
@@ -20,17 +19,18 @@ type JobFnc func(job *Job)
 
 type Queue struct {
 	Name          string
+	RetryFailures int
 	client        *redis.Client
 	mutex         *redsync.Mutex
 	jobFnc        JobFnc
 	jobs          []Job
-	RetryFailures int
 	workers       int
 	limiter       *RateLimiter
 	ctx           context.Context
 	scheduler     *cron.Cron
 	cronPattern   string
 	running       bool
+	logger        LoggerType
 }
 
 type RateLimiter struct {
@@ -44,6 +44,7 @@ type Options struct {
 	RetryFailures int
 	Limiter       *RateLimiter
 	Pattern       string
+	Logger        LoggerType
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -71,6 +72,11 @@ func New(name string, opt *Options) *Queue {
 		limiter:       opt.Limiter,
 		ctx:           context.Background(),
 		running:       true,
+		logger:        opt.Logger,
+	}
+
+	if opt.Logger == "" {
+		queue.logger = LoggerDefault
 	}
 
 	if opt.Pattern != "" {
@@ -87,10 +93,10 @@ func New(name string, opt *Options) *Queue {
 func (q *Queue) AddJob(opt AddJobOptions) {
 	var job *Job
 	if q.IsLimit() {
-		fmt.Printf("Add job %s to delay\n", opt.Id)
+		q.formatLog(LoggerInfo, "Add job %s to delay\n", opt.Id)
 		job = q.delayJob(opt)
 	} else {
-		fmt.Printf("Add job %s to waiting\n", opt.Id)
+		q.formatLog(LoggerInfo, "Add job %s to waiting\n", opt.Id)
 		job = q.newJob(opt)
 	}
 	q.jobs = append(q.jobs, *job)
@@ -112,10 +118,10 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 	for _, option := range options {
 		var job *Job
 		if q.IsLimit() {
-			fmt.Printf("Add job %s to delay\n", option.Id)
+			q.formatLog(LoggerInfo, "Add job %s to delay\n", option.Id)
 			job = q.delayJob(option)
 		} else {
-			fmt.Printf("Add job %s to waiting\n", option.Id)
+			q.formatLog(LoggerInfo, "Add job %s to waiting\n", option.Id)
 			job = q.newJob(option)
 		}
 		q.jobs = append(q.jobs, *job)
@@ -132,7 +138,7 @@ func (q *Queue) Process(jobFnc JobFnc) {
 	if q.scheduler != nil {
 		_, err := q.scheduler.AddFunc(q.cronPattern, func() { q.Run() })
 		if err != nil {
-			log.Fatalf("failed to add job: %v\n", err)
+			q.formatLog(LoggerFatal, "failed to add job: %v\n", err)
 		}
 		q.scheduler.Start()
 	}
@@ -144,17 +150,16 @@ func (q *Queue) Process(jobFnc JobFnc) {
 // stored.
 func (q *Queue) Run() {
 	if !q.running {
-		fmt.Println("Queue is not running")
+		q.formatLog(LoggerInfo, "Queue is not running")
 		return
 	}
 	// Lock the mutex
 	if err := q.mutex.Lock(); err != nil {
-		fmt.Println(err)
+		q.formatLog(LoggerFatal, "Error when lock mutex: %v\n", err)
 		return
 	}
-	fmt.Printf("Running on %s\n", time.Now().String())
 	execJobs := []*Job{}
-	for i := 0; i < len(q.jobs); i++ {
+	for i := range q.jobs {
 		if q.jobs[i].IsReady() {
 			execJobs = append(execJobs, &q.jobs[i])
 		}
@@ -164,7 +169,7 @@ func (q *Queue) Run() {
 		min := Min(len(execJobs), q.workers)
 		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
-		for i := 0; i < len(numJobs); i++ {
+		for i := range numJobs {
 			job := numJobs[i]
 			wg.Add(1)
 			go func() {
@@ -179,7 +184,7 @@ func (q *Queue) Run() {
 	q.Retry()
 	// Unlock the mutex
 	if ok, err := q.mutex.Unlock(); !ok || err != nil {
-		fmt.Println(err)
+		q.formatLog(LoggerFatal, "Error when unlock mutex: %v\n", err)
 	}
 }
 
@@ -191,7 +196,7 @@ func (q *Queue) Run() {
 func (q *Queue) Retry() {
 	execJobs := []*Job{}
 	// For retry failures
-	for i := 0; i < len(q.jobs); i++ {
+	for i := range q.jobs {
 		if q.jobs[i].Status == DelayedStatus {
 			execJobs = append(execJobs, &q.jobs[i])
 		}
@@ -202,7 +207,7 @@ func (q *Queue) Retry() {
 		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
 		var finishedJob []string
-		for i := 0; i < len(numJobs); i++ {
+		for i := range numJobs {
 			job := numJobs[i]
 			wg.Add(1)
 			go func() {
@@ -236,7 +241,7 @@ func (q *Queue) Retry() {
 // This can be used to monitor the queue, and to test the queue's behavior.
 func (q *Queue) CountJobs(status JobStatus) int {
 	count := 0
-	for i := 0; i < len(q.jobs); i++ {
+	for i := range q.jobs {
 		if q.jobs[i].Status == status {
 			count++
 		}
@@ -251,7 +256,7 @@ func (q *Queue) CountJobs(status JobStatus) int {
 func (q *Queue) Remove(key string) {
 	findIdx := slices.IndexFunc(q.jobs, func(j Job) bool { return j.Id == key })
 	if findIdx != -1 {
-		q.jobs = append(q.jobs[:findIdx], q.jobs[findIdx+1:]...)
+		q.jobs = slices.Delete(q.jobs, findIdx, findIdx+1)
 	}
 }
 
@@ -280,7 +285,7 @@ func (q *Queue) IsLimit() bool {
 	} else {
 		value, err := client.Incr(q.ctx, q.Name).Result()
 		if err != nil {
-			panic(err.Error())
+			q.formatLog(LoggerPanic, "Error when count redis: %v\n", err)
 		}
 		if value == 1 {
 			client.Expire(q.ctx, q.Name, q.limiter.Duration)
@@ -301,4 +306,24 @@ func (q *Queue) Pause() {
 func (q *Queue) Resume() {
 	q.running = true
 	q.Run()
+}
+
+func (q *Queue) formatLog(logType LoggerType, format string, v ...any) {
+	if q.logger == LoggerDisabled {
+		return
+	} else if q.logger == LoggerDefault {
+		q.log(logType, format, v...)
+	} else if q.logger == logType {
+		q.log(logType, format, v...)
+	}
+}
+
+func (q *Queue) log(logType LoggerType, format string, v ...any) {
+	if logType == LoggerInfo {
+		log.Printf(format, v...)
+	} else if logType == LoggerFatal {
+		log.Fatalf(format, v...)
+	} else if logType == LoggerPanic {
+		log.Panicf(format, v...)
+	}
 }

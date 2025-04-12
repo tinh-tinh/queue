@@ -69,8 +69,7 @@ type Callback func() error
 func (job *Job) Process(cb Callback) {
 	job.Status = ActiveStatus
 	job.ProcessedOn = time.Now()
-	fmt.Printf("⌛ Running job %s progress\n", job.Id)
-	println()
+	job.queue.formatLog(LoggerInfo, "Running job %s progress\n\n", job.Id)
 	defer func() {
 		if r := recover(); r != nil {
 			job.FailedReason = fmt.Sprintf("%v", r)
@@ -79,16 +78,14 @@ func (job *Job) Process(cb Callback) {
 			client := job.queue.client
 			_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
 			if err != nil {
-				fmt.Printf("Failed to store error: %s\n", err.Error())
+				job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n\n", err.Error())
 			}
 			if job.RetryFailures > 0 {
 				job.Status = DelayedStatus
 				job.RetryFailures--
-				fmt.Printf("Add job %s for retry (%d remains) 🕛\n", job.Id, job.RetryFailures)
-				println()
+				job.queue.formatLog(LoggerInfo, "Add job %s for retry (%d remains) \n\n", job.Id, job.RetryFailures)
 			} else {
-				fmt.Printf("Failed job %s ❌\n", job.Id)
-				println()
+				job.queue.formatLog(LoggerInfo, "Failed job %s \n\n", job.Id)
 			}
 		}
 	}()
@@ -96,8 +93,7 @@ func (job *Job) Process(cb Callback) {
 	if err == nil {
 		job.FinishedOn = time.Now()
 		job.Status = CompletedStatus
-		fmt.Printf("Job %s done ✅ in %dms\n", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
-		println()
+		job.queue.formatLog(LoggerInfo, "Job %s done in %dms\n\n", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
 	} else {
 		job.FailedReason = err.Error()
 		job.Status = FailedStatus
@@ -105,16 +101,14 @@ func (job *Job) Process(cb Callback) {
 		client := job.queue.client
 		_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
 		if err != nil {
-			fmt.Printf("Failed to store error: %s\n", err.Error())
+			job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n", err.Error())
 		}
 		if job.RetryFailures > 0 {
 			job.Status = DelayedStatus
 			job.RetryFailures--
-			fmt.Printf("Add job %s for retry (%d remains) 🕛\n", job.Id, job.RetryFailures)
-			println()
+			job.queue.formatLog(LoggerInfo, "Add job %s for retry (%d remains) \n\n", job.Id, job.RetryFailures)
 		} else {
-			fmt.Printf("Failed job %s ❌\n", job.Id)
-			println()
+			job.queue.formatLog(LoggerInfo, "Failed job %s \n\n", job.Id)
 		}
 	}
 }
