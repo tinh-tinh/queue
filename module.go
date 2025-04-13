@@ -8,6 +8,20 @@ import (
 
 const QUEUE core.Provide = "QUEUE"
 
+func ForRoot(opt *Options) core.Modules {
+	return func(module core.Module) core.Module {
+		queueModule := module.New(core.NewModuleOptions{})
+
+		queueModule.NewProvider(core.ProviderOptions{
+			Name:  QUEUE,
+			Value: opt,
+		})
+		queueModule.Export(QUEUE)
+
+		return queueModule
+	}
+}
+
 // getQueueName generates a unique name for a queue provider.
 //
 // The name is in the form "<name>Queue".
@@ -18,13 +32,24 @@ func getQueueName(name string) core.Provide {
 // Register registers a new queue module with the given name and options. The
 // registered module creates a new queue with the given name and options, and
 // exports the queue under the name "<name>Queue".
-func Register(name string, opt *Options) core.Modules {
+func Register(name string, opts ...*Options) core.Modules {
+	var option *Options
+	if len(opts) > 0 {
+		option = opts[0]
+	}
 	return func(module core.Module) core.Module {
+		if option == nil {
+			defaultOptions, ok := module.Ref(QUEUE).(*Options)
+			if !ok || defaultOptions == nil {
+				panic("not config option for queue")
+			}
+			option = defaultOptions
+		}
 		queueModule := module.New(core.NewModuleOptions{})
 
 		queueModule.NewProvider(core.ProviderOptions{
 			Name:  getQueueName(name),
-			Value: New(name, opt),
+			Value: New(name, option),
 		})
 		queueModule.Export(getQueueName(name))
 
