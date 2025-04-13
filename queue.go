@@ -44,6 +44,7 @@ type Options struct {
 	Logger           LoggerType
 	RemoveOnComplete bool
 	RemoveOnFail     bool
+	Delay            time.Duration
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -162,6 +163,9 @@ func (q *Queue) Run() {
 	}
 
 	for len(execJobs) > 0 {
+		if q.config.Delay != 0 {
+			time.Sleep(q.config.Delay)
+		}
 		min := Min(len(execJobs), q.config.Workers)
 		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
