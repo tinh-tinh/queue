@@ -35,7 +35,7 @@ func Register(name string, opt *Options) core.Modules {
 // InjectQueue injects a queue from the given module, using the given name. If the
 // module does not contain a queue with the given name, or if the queue is not of
 // type *Queue, InjectQueue returns nil.
-func Inject(module core.Module, name string) *Queue {
+func Inject(module core.RefProvider, name string) *Queue {
 	queue, ok := module.Ref(getQueueName(name)).(*Queue)
 	if !ok {
 		return nil

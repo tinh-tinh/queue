@@ -15,10 +15,9 @@ import (
 )
 
 func Test_Queue(t *testing.T) {
-	addr := "localhost:6379"
 	userQueue := queue.New("user", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -46,13 +45,13 @@ func Test_Queue(t *testing.T) {
 		})
 	})
 
-	t.Parallel()
-
-	// t.Run("test", func(t *testing.T) {
 	userQueue.AddJob(queue.AddJobOptions{
 		Id:   "1",
 		Data: "value 1",
 	})
+
+	count := userQueue.CountJobs(queue.CompletedStatus)
+	assert.Equal(t, 1, count)
 
 	userQueue.BulkAddJob([]queue.AddJobOptions{
 		{
@@ -107,19 +106,31 @@ func Test_Queue(t *testing.T) {
 		},
 	})
 
+	count = userQueue.CountJobs(queue.CompletedStatus)
+	assert.Equal(t, 7, count)
+
+	count = userQueue.CountJobs(queue.FailedStatus)
+	assert.Equal(t, 4, count)
+
 	userQueue.Pause()
 	userQueue.AddJob(queue.AddJobOptions{
 		Id:   "2",
 		Data: "value 2",
 	})
+
+	count = userQueue.CountJobs(queue.WaitStatus)
+	assert.Equal(t, 1, count)
+
 	userQueue.Resume()
+
+	count = userQueue.CountJobs(queue.CompletedStatus)
+	assert.Equal(t, 8, count)
 }
 
 func Test_SchedulerQueue(t *testing.T) {
-	addr := "localhost:6379"
 	userQueue := queue.New("user_schedule", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -130,13 +141,6 @@ func Test_SchedulerQueue(t *testing.T) {
 
 	userQueue.Process(func(job *queue.Job) {
 		job.Process(func() error {
-			num, err := strconv.Atoi(job.Id)
-			require.Nil(t, err)
-
-			if num%3 == 0 {
-				return errors.New("error by test")
-			}
-
 			key, err := json.Marshal(job.Data)
 			require.Nil(t, err)
 
@@ -163,10 +167,9 @@ func HeaveTask(key string) (string, error) {
 }
 
 func Test_Crash(t *testing.T) {
-	addr := "localhost:6379"
 	userQueue := queue.New("crash", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -180,20 +183,18 @@ func Test_Crash(t *testing.T) {
 		})
 	})
 
-	t.Parallel()
-
-	// t.Run("test", func(t *testing.T) {
-	userQueue.AddJob(queue.AddJobOptions{
-		Id:   "1",
-		Data: "value 1",
+	require.NotPanics(t, func() {
+		userQueue.AddJob(queue.AddJobOptions{
+			Id:   "1",
+			Data: "value 1",
+		})
 	})
 }
 
 func TestDisableLog(t *testing.T) {
-	addr := "localhost:6379"
 	userQueue := queue.New("disabled", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -208,8 +209,6 @@ func TestDisableLog(t *testing.T) {
 		})
 	})
 
-	t.Parallel()
-
 	// t.Run("test", func(t *testing.T) {
 	userQueue.AddJob(queue.AddJobOptions{
 		Id:   "1",
@@ -218,10 +217,9 @@ func TestDisableLog(t *testing.T) {
 }
 
 func Test_LoggerInfo(t *testing.T) {
-	addr := "localhost:6379"
 	userQueue := queue.New("info", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -246,10 +244,9 @@ func Test_LoggerInfo(t *testing.T) {
 }
 
 func Test_CountJob(t *testing.T) {
-	addr := "localhost:6379"
 	postQueue := queue.New("post", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -311,10 +308,9 @@ func Test_CountJob(t *testing.T) {
 }
 
 func Test_RemoveOnComplateAndFail(t *testing.T) {
-	addr := "localhost:6379"
 	docQueue := queue.New("document", &queue.Options{
 		Connect: &redis.Options{
-			Addr:     addr,
+			Addr:     "localhost:6379",
 			Password: "",
 			DB:       0,
 		},
@@ -387,4 +383,35 @@ func Test_RemoveOnComplateAndFail(t *testing.T) {
 
 	count = docQueue.CountJobs(queue.FailedStatus)
 	assert.Equal(t, 0, count)
+}
+
+func Test_Delay(t *testing.T) {
+	userDelayQueue := queue.New("user_delay", &queue.Options{
+		Connect: &redis.Options{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		},
+		Workers:       3,
+		RetryFailures: 3,
+		Delay:         3 * time.Second,
+	})
+
+	userDelayQueue.Process(func(job *queue.Job) {
+		job.Process(func() error {
+			key, err := json.Marshal(job.Data)
+			require.Nil(t, err)
+
+			_, err = HeaveTask(string(key))
+			require.Nil(t, err)
+
+			return nil
+		})
+	})
+
+	userDelayQueue.AddJob(queue.AddJobOptions{
+		Id:       "1",
+		Data:     "value 1",
+		Priority: 1,
+	})
 }
