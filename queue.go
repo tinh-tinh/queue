@@ -18,19 +18,16 @@ import (
 type JobFnc func(job *Job)
 
 type Queue struct {
-	Name          string
-	RetryFailures int
-	client        *redis.Client
-	mutex         *redsync.Mutex
-	jobFnc        JobFnc
-	jobs          []Job
-	workers       int
-	limiter       *RateLimiter
-	ctx           context.Context
-	scheduler     *cron.Cron
-	cronPattern   string
-	running       bool
-	logger        LoggerType
+	Name        string
+	client      *redis.Client
+	mutex       *redsync.Mutex
+	jobFnc      JobFnc
+	jobs        []Job
+	ctx         context.Context
+	scheduler   *cron.Cron
+	cronPattern string
+	running     bool
+	config      Options
 }
 
 type RateLimiter struct {
@@ -39,12 +36,14 @@ type RateLimiter struct {
 }
 
 type Options struct {
-	Connect       *redis.Options
-	Workers       int
-	RetryFailures int
-	Limiter       *RateLimiter
-	Pattern       string
-	Logger        LoggerType
+	Connect          *redis.Options
+	Workers          int
+	RetryFailures    int
+	Limiter          *RateLimiter
+	Pattern          string
+	Logger           LoggerType
+	RemoveOnComplete bool
+	RemoveOnFail     bool
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -64,19 +63,16 @@ func New(name string, opt *Options) *Queue {
 	rs := redsync.New(pool)
 
 	queue := &Queue{
-		client:        client,
-		Name:          name,
-		mutex:         rs.NewMutex(name),
-		workers:       opt.Workers,
-		RetryFailures: opt.RetryFailures,
-		limiter:       opt.Limiter,
-		ctx:           context.Background(),
-		running:       true,
-		logger:        opt.Logger,
+		client:  client,
+		Name:    name,
+		mutex:   rs.NewMutex(name),
+		ctx:     context.Background(),
+		running: true,
+		config:  *opt,
 	}
 
 	if opt.Logger == "" {
-		queue.logger = LoggerDefault
+		queue.config.Logger = LoggerDefault
 	}
 
 	if opt.Pattern != "" {
@@ -166,7 +162,7 @@ func (q *Queue) Run() {
 	}
 
 	for len(execJobs) > 0 {
-		min := Min(len(execJobs), q.workers)
+		min := Min(len(execJobs), q.config.Workers)
 		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
 		for i := range numJobs {
@@ -179,6 +175,8 @@ func (q *Queue) Run() {
 		}
 		wg.Wait()
 		execJobs = execJobs[min:]
+		q.RemoveCompleted()
+		q.RemoveFailed()
 	}
 
 	q.Retry()
@@ -203,7 +201,7 @@ func (q *Queue) Retry() {
 	}
 
 	for len(execJobs) > 0 {
-		min := Min(len(execJobs), q.workers)
+		min := Min(len(execJobs), q.config.Workers)
 		numJobs := execJobs[:min]
 		var wg sync.WaitGroup
 		var finishedJob []string
@@ -233,6 +231,7 @@ func (q *Queue) Retry() {
 				}
 			}
 		}
+		q.RemoveFailed()
 	}
 }
 
@@ -274,13 +273,13 @@ func Min(a int, b int) int {
 // it increments the counter and returns false. If the increment fails, it
 // panics.
 func (q *Queue) IsLimit() bool {
-	if q.limiter == nil {
+	if q.config.Limiter == nil {
 		return false
 	}
 	client := q.client
 	attemps, _ := client.Get(q.ctx, q.Name).Result()
 	attempNum, _ := strconv.Atoi(attemps)
-	if attemps != "" && attempNum >= q.limiter.Max {
+	if attemps != "" && attempNum >= q.config.Limiter.Max {
 		return true
 	} else {
 		value, err := client.Incr(q.ctx, q.Name).Result()
@@ -288,7 +287,7 @@ func (q *Queue) IsLimit() bool {
 			q.formatLog(LoggerPanic, "Error when count redis: %v\n", err)
 		}
 		if value == 1 {
-			client.Expire(q.ctx, q.Name, q.limiter.Duration)
+			client.Expire(q.ctx, q.Name, q.config.Limiter.Duration)
 		}
 		return false
 	}
@@ -308,12 +307,28 @@ func (q *Queue) Resume() {
 	q.Run()
 }
 
+func (q *Queue) RemoveCompleted() {
+	if q.config.RemoveOnComplete {
+		q.jobs = Remove(q.jobs, func(j Job) bool {
+			return j.Status == CompletedStatus
+		})
+	}
+}
+
+func (q *Queue) RemoveFailed() {
+	if q.config.RemoveOnFail {
+		q.jobs = Remove(q.jobs, func(j Job) bool {
+			return j.Status == FailedStatus
+		})
+	}
+}
+
 func (q *Queue) formatLog(logType LoggerType, format string, v ...any) {
-	if q.logger == LoggerDisabled {
+	if q.config.Logger == LoggerDisabled {
 		return
-	} else if q.logger == LoggerDefault {
+	} else if q.config.Logger == LoggerDefault {
 		q.log(logType, format, v...)
-	} else if q.logger == logType {
+	} else if q.config.Logger == logType {
 		q.log(logType, format, v...)
 	}
 }

@@ -39,7 +39,7 @@ func (queue *Queue) newJob(opt AddJobOptions) *Job {
 		Status:        WaitStatus,
 		Stacktrace:    []string{},
 		queue:         queue,
-		RetryFailures: queue.RetryFailures,
+		RetryFailures: queue.config.RetryFailures,
 	}
 
 	return job
@@ -55,7 +55,7 @@ func (queue *Queue) delayJob(opt AddJobOptions) *Job {
 		Status:        DelayedStatus,
 		Stacktrace:    []string{},
 		queue:         queue,
-		RetryFailures: queue.RetryFailures,
+		RetryFailures: queue.config.RetryFailures,
 	}
 
 	return job
@@ -72,21 +72,8 @@ func (job *Job) Process(cb Callback) {
 	job.queue.formatLog(LoggerInfo, "Running job %s progress\n\n", job.Id)
 	defer func() {
 		if r := recover(); r != nil {
-			job.FailedReason = fmt.Sprintf("%v", r)
-			job.Status = FailedStatus
-			// Store error
-			client := job.queue.client
-			_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
-			if err != nil {
-				job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n\n", err.Error())
-			}
-			if job.RetryFailures > 0 {
-				job.Status = DelayedStatus
-				job.RetryFailures--
-				job.queue.formatLog(LoggerInfo, "Add job %s for retry (%d remains) \n\n", job.Id, job.RetryFailures)
-			} else {
-				job.queue.formatLog(LoggerInfo, "Failed job %s \n\n", job.Id)
-			}
+			failedReason := fmt.Sprintf("%v", r)
+			job.handlerError(failedReason)
 		}
 	}()
 	err := cb()
@@ -95,21 +82,25 @@ func (job *Job) Process(cb Callback) {
 		job.Status = CompletedStatus
 		job.queue.formatLog(LoggerInfo, "Job %s done in %dms\n\n", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
 	} else {
-		job.FailedReason = err.Error()
-		job.Status = FailedStatus
-		// Store error
-		client := job.queue.client
-		_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
-		if err != nil {
-			job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n", err.Error())
-		}
-		if job.RetryFailures > 0 {
-			job.Status = DelayedStatus
-			job.RetryFailures--
-			job.queue.formatLog(LoggerInfo, "Add job %s for retry (%d remains) \n\n", job.Id, job.RetryFailures)
-		} else {
-			job.queue.formatLog(LoggerInfo, "Failed job %s \n\n", job.Id)
-		}
+		job.handlerError(err.Error())
+	}
+}
+
+func (job *Job) handlerError(reasonError string) {
+	job.FailedReason = reasonError
+	job.Status = FailedStatus
+	// Store error
+	client := job.queue.client
+	_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+	if err != nil {
+		job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n\n", err.Error())
+	}
+	if job.RetryFailures > 0 {
+		job.Status = DelayedStatus
+		job.RetryFailures--
+		job.queue.formatLog(LoggerInfo, "Add job %s for retry (%d remains) \n\n", job.Id, job.RetryFailures)
+	} else {
+		job.queue.formatLog(LoggerInfo, "Failed job %s \n\n", job.Id)
 	}
 }
 
