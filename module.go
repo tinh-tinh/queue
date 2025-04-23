@@ -22,6 +22,21 @@ func ForRoot(opt *Options) core.Modules {
 	}
 }
 
+func ForRootFactory(factory func(ref core.RefProvider) *Options) core.Modules {
+	return func(module core.Module) core.Module {
+		opt := factory(module)
+		queueModule := module.New(core.NewModuleOptions{})
+
+		queueModule.NewProvider(core.ProviderOptions{
+			Name:  QUEUE,
+			Value: opt,
+		})
+		queueModule.Export(QUEUE)
+
+		return queueModule
+	}
+}
+
 // getQueueName generates a unique name for a queue provider.
 //
 // The name is in the form "<name>Queue".
