@@ -71,3 +71,25 @@ func Test_DefaultOptions(t *testing.T) {
 	mediaQueue := queue.Inject(module, "media")
 	require.NotNil(t, mediaQueue)
 }
+
+func Test_Factory(t *testing.T) {
+	module := core.NewModule(core.NewModuleOptions{
+		Imports: []core.Modules{
+			queue.ForRootFactory(func(ref core.RefProvider) *queue.Options {
+				return &queue.Options{
+					Connect: &redis.Options{
+						Addr:     "localhost:6379",
+						DB:       0,
+						Password: "",
+					},
+					Workers:       6,
+					RetryFailures: 3,
+				}
+			}),
+			queue.Register("livestream"),
+		},
+	})
+
+	videoQueue := queue.Inject(module, "livestream")
+	require.NotNil(t, videoQueue)
+}
