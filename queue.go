@@ -45,6 +45,7 @@ type Options struct {
 	RemoveOnComplete bool
 	RemoveOnFail     bool
 	Delay            time.Duration
+	Timeout          time.Duration // Default: 1 minutes
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -79,6 +80,9 @@ func New(name string, opt *Options) *Queue {
 	if opt.Pattern != "" {
 		queue.scheduler = cron.New()
 		queue.cronPattern = opt.Pattern
+	}
+	if opt.Timeout == 0 {
+		queue.config.Timeout = 1 * time.Minute
 	}
 
 	return queue
@@ -163,21 +167,43 @@ func (q *Queue) Run() {
 	}
 
 	for len(execJobs) > 0 {
+		// Delay
 		if q.config.Delay != 0 {
 			time.Sleep(q.config.Delay)
 		}
+
+		// Get number of workers for run
 		min := Min(len(execJobs), q.config.Workers)
 		numJobs := execJobs[:min]
+
+		ctx, cancel := context.WithTimeout(context.Background(), q.config.Timeout)
+		defer cancel()
+
 		var wg sync.WaitGroup
+		done := make(chan struct{})
+
 		for i := range numJobs {
 			job := numJobs[i]
 			wg.Add(1)
-			go func() {
+			go func(job *Job) {
 				defer wg.Done()
 				q.jobFnc(job)
-			}()
+			}(job)
 		}
-		wg.Wait()
+
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			q.formatLog(LoggerInfo, "All jobs done\n")
+		case <-ctx.Done():
+			q.MarkJobFailedTimeout(numJobs)
+		}
+
+		// Handle remove job
 		execJobs = execJobs[min:]
 		q.RemoveCompleted()
 		q.RemoveFailed()
@@ -205,22 +231,45 @@ func (q *Queue) Retry() {
 	}
 
 	for len(execJobs) > 0 {
+		// Delay
+		if q.config.Delay != 0 {
+			time.Sleep(q.config.Delay)
+		}
+
 		min := Min(len(execJobs), q.config.Workers)
 		numJobs := execJobs[:min]
+
+		ctx, cancel := context.WithTimeout(context.Background(), q.config.Timeout)
+		defer cancel()
+
 		var wg sync.WaitGroup
+		done := make(chan struct{})
+
 		var finishedJob []string
 		for i := range numJobs {
 			job := numJobs[i]
 			wg.Add(1)
-			go func() {
+			go func(job *Job) {
 				defer wg.Done()
 				q.jobFnc(job)
 				if job.IsFinished() {
 					finishedJob = append(finishedJob, job.Id)
 				}
-			}()
+			}(job)
 		}
-		wg.Wait()
+
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			q.formatLog(LoggerInfo, "All jobs done when retry\n")
+		case <-ctx.Done():
+			q.MarkJobFailedTimeout(numJobs)
+		}
+
 		if len(finishedJob) > 0 {
 			for _, id := range finishedJob {
 				if len(execJobs) == 1 && execJobs[0].Id == id {
@@ -324,6 +373,14 @@ func (q *Queue) RemoveFailed() {
 		q.jobs = Remove(q.jobs, func(j Job) bool {
 			return j.Status == FailedStatus
 		})
+	}
+}
+
+func (q *Queue) MarkJobFailedTimeout(numberJobs []*Job) {
+	for _, job := range numberJobs {
+		if job.Status == ActiveStatus {
+			job.Status = FailedStatus
+		}
 	}
 }
 

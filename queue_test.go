@@ -393,7 +393,7 @@ func Test_Delay(t *testing.T) {
 			DB:       0,
 		},
 		Workers:       3,
-		RetryFailures: 3,
+		RetryFailures: 0,
 		Delay:         3 * time.Second,
 	})
 
@@ -402,6 +402,9 @@ func Test_Delay(t *testing.T) {
 			key, err := json.Marshal(job.Data)
 			require.Nil(t, err)
 
+			if job.Id == "1" {
+				return errors.New("ac")
+			}
 			_, err = HeaveTask(string(key))
 			require.Nil(t, err)
 
@@ -414,4 +417,47 @@ func Test_Delay(t *testing.T) {
 		Data:     "value 1",
 		Priority: 1,
 	})
+
+	userDelayQueue.AddJob(queue.AddJobOptions{
+		Id:       "2",
+		Data:     "value 2",
+		Priority: 1,
+	})
+}
+
+func Test_Timeout(t *testing.T) {
+	userTimeoutQueue := queue.New("user_timeout", &queue.Options{
+		Connect: &redis.Options{
+			Addr:     "localhost:6379",
+			Password: "",
+			DB:       0,
+		},
+		Workers:       3,
+		RetryFailures: 3,
+		Timeout:       1 * time.Second,
+	})
+
+	userTimeoutQueue.Process(func(job *queue.Job) {
+		job.Process(func() error {
+			key, err := json.Marshal(job.Data)
+			require.Nil(t, err)
+
+			if job.Id == "1" {
+				time.Sleep(2 * time.Second)
+			}
+			_, err = HeaveTask(string(key))
+			require.Nil(t, err)
+
+			return nil
+		})
+	})
+
+	userTimeoutQueue.AddJob(queue.AddJobOptions{
+		Id:       "1",
+		Data:     "value 1",
+		Priority: 1,
+	})
+
+	failedJob := userTimeoutQueue.CountJobs(queue.FailedStatus)
+	require.Equal(t, 1, failedJob)
 }
