@@ -16,7 +16,7 @@
 
 Package Queue for Tinh Tinh
 
-## Install 
+## Install
 
 ```bash
 go get -u github.com/tinh-tinh/queue/v2

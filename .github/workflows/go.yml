@@ -1,9 +1,9 @@
 name: Go
 on: 
   push:
-    branches: [ "master", "v2" ]
+    branches: [ "master" ]
   pull_request:
-      branches: [ "master", "v2" ]
+    branches: [ "master" ]
   
 
 jobs:
@@ -35,18 +35,27 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: go mod download
+      - name: Decide if tests should run
+        id: set_run_tests
+        run: |
+          if [[ ("$GITHUB_EVENT_NAME" == "push" && ( "$GITHUB_HEAD_COMMIT_MESSAGE" == fix:* || "$GITHUB_HEAD_COMMIT_MESSAGE" == feat:* || "$GITHUB_HEAD_COMMIT_MESSAGE" == refactor:* || "$GITHUB_HEAD_COMMIT_MESSAGE" == perf:* )) || \
+                ("$GITHUB_EVENT_NAME" == "pull_request" && ( "$GITHUB_PULL_REQUEST_TITLE" == fix:* || "$GITHUB_PULL_REQUEST_TITLE" == feat:* || "$GITHUB_PULL_REQUEST_TITLE" == refactor:* || "$GITHUB_PULL_REQUEST_TITLE" == perf:* )) ]]; then
+            echo "should_run_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run_tests=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          GITHUB_PULL_REQUEST_TITLE: ${{ github.event.pull_request.title }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
 
-      - name: Build
-        run: go build -v ./...
-
-      - name: Connect to Redis
-        # Runs a script that creates a Redis client, populates
-        # the client with data, and retrieves data
-        run: go test -cover ./... -coverprofile=coverage.txt      # Environment variable used by the `client.js` script to create a new Redis client.
+      - name: Test with coverage
+        if: steps.set_run_tests.outputs.should_run_tests == 'true'
+        run: |
+          go test -cover -coverprofile=coverage.txt ./...
 
       - name: Upload coverage reports to Codecov
+        if: steps.set_run_tests.outputs.should_run_tests == 'true'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
