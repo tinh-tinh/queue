@@ -13,6 +13,7 @@ import (
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
+	"github.com/tinh-tinh/tinhtinh/v2/common"
 )
 
 type JobFnc func(job *Job)
@@ -362,7 +363,7 @@ func (q *Queue) Resume() {
 
 func (q *Queue) RemoveCompleted() {
 	if q.config.RemoveOnComplete {
-		q.jobs = Remove(q.jobs, func(j Job) bool {
+		q.jobs = common.Remove(q.jobs, func(j Job) bool {
 			return j.Status == CompletedStatus
 		})
 	}
@@ -370,7 +371,7 @@ func (q *Queue) RemoveCompleted() {
 
 func (q *Queue) RemoveFailed() {
 	if q.config.RemoveOnFail {
-		q.jobs = Remove(q.jobs, func(j Job) bool {
+		q.jobs = common.Remove(q.jobs, func(j Job) bool {
 			return j.Status == FailedStatus
 		})
 	}
