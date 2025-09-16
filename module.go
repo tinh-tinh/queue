@@ -3,6 +3,7 @@ package queue
 import (
 	"fmt"
 
+	"github.com/tinh-tinh/tinhtinh/v2/common"
 	"github.com/tinh-tinh/tinhtinh/v2/core"
 )
 
@@ -52,13 +53,22 @@ func Register(name string, opts ...*Options) core.Modules {
 	if len(opts) > 0 {
 		option = opts[0]
 	}
+
 	return func(module core.Module) core.Module {
+		defaultOptions, ok := module.Ref(QUEUE).(*Options)
 		if option == nil {
-			defaultOptions, ok := module.Ref(QUEUE).(*Options)
-			if !ok || defaultOptions == nil {
-				panic("not config option for queue")
+			if ok {
+				option = defaultOptions
 			}
-			option = defaultOptions
+		} else {
+			if ok {
+				mergeOpt := common.MergeStruct(*option, *defaultOptions)
+				option = &mergeOpt
+			}
+		}
+
+		if option == nil {
+			panic("not config option for queue")
 		}
 		queueModule := module.New(core.NewModuleOptions{})
 
