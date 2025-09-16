@@ -55,11 +55,6 @@ func Test_DefaultOptions(t *testing.T) {
 			}),
 			queue.Register("video"),
 			queue.Register("media", &queue.Options{
-				Connect: &redis.Options{
-					Addr:     "localhost:6379",
-					DB:       0,
-					Password: "",
-				},
 				Workers: 3,
 			}),
 		},
