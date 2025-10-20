@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
 	"sort"
@@ -188,6 +189,12 @@ func (q *Queue) Run() {
 			wg.Add(1)
 			go func(job *Job) {
 				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						failedReason := fmt.Sprintf("%v", r)
+						q.formatLog(LoggerInfo, "Error when processing job: %v\n", failedReason)
+					}
+				}()
 				q.jobFnc(job)
 			}(job)
 		}
@@ -396,11 +403,12 @@ func (q *Queue) formatLog(logType LoggerType, format string, v ...any) {
 }
 
 func (q *Queue) log(logType LoggerType, format string, v ...any) {
-	if logType == LoggerInfo {
+	switch logType {
+	case LoggerInfo:
 		log.Printf(format, v...)
-	} else if logType == LoggerFatal {
+	case LoggerFatal:
 		log.Fatalf(format, v...)
-	} else if logType == LoggerPanic {
+	case LoggerPanic:
 		log.Panicf(format, v...)
 	}
 }

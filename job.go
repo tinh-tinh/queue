@@ -73,7 +73,7 @@ func (job *Job) Process(cb Callback) {
 	defer func() {
 		if r := recover(); r != nil {
 			failedReason := fmt.Sprintf("%v", r)
-			job.handlerError(failedReason)
+			job.HandlerError(failedReason)
 		}
 	}()
 	err := cb()
@@ -82,16 +82,16 @@ func (job *Job) Process(cb Callback) {
 		job.Status = CompletedStatus
 		job.queue.formatLog(LoggerInfo, "Job %s done in %dms\n\n", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
 	} else {
-		job.handlerError(err.Error())
+		job.HandlerError(err.Error())
 	}
 }
 
-func (job *Job) handlerError(reasonError string) {
+func (job *Job) HandlerError(reasonError string) {
 	job.FailedReason = reasonError
 	job.Status = FailedStatus
 	// Store error
 	client := job.queue.client
-	_, err := client.HSet(context.Background(), fmt.Sprintf("%sstore", job.queue.Name), job.Id, job.FailedReason).Result()
+	_, err := client.HSet(context.Background(), job.queue.Name, job.Id, job.FailedReason).Result()
 	if err != nil {
 		job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n\n", err.Error())
 	}
