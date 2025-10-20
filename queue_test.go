@@ -178,6 +178,9 @@ func Test_Crash(t *testing.T) {
 	})
 
 	userQueue.Process(func(job *queue.Job) {
+		if job.Id == "2" {
+			panic("error by test")
+		}
 		job.Process(func() error {
 			panic("error by test")
 		})
@@ -187,6 +190,10 @@ func Test_Crash(t *testing.T) {
 		userQueue.AddJob(queue.AddJobOptions{
 			Id:   "1",
 			Data: "value 1",
+		})
+		userQueue.AddJob(queue.AddJobOptions{
+			Id:   "2",
+			Data: "value 2",
 		})
 	})
 }
