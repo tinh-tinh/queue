@@ -55,7 +55,7 @@ func Test_Proccessor(t *testing.T) {
 		return ctrl
 	}
 
-	appMoule := func() core.Module {
+	appModule := func() core.Module {
 		return core.NewModule(core.NewModuleOptions{
 			Imports: []core.Modules{
 				queue.ForRootFactory(func(ref core.RefProvider) *queue.Options {
@@ -76,7 +76,7 @@ func Test_Proccessor(t *testing.T) {
 		})
 	}
 
-	server := core.CreateFactory(appMoule)
+	server := core.CreateFactory(appModule)
 	server.SetGlobalPrefix("api")
 
 	testServer := httptest.NewServer(server.PrepareBeforeListen())
@@ -88,4 +88,12 @@ func Test_Proccessor(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	time.Sleep(1 * time.Second)
+}
+
+func TestNil(t *testing.T) {
+	appModule := core.NewModule(core.NewModuleOptions{
+		Imports: []core.Modules{},
+	})
+
+	require.Nil(t, queue.Inject(appModule, ""))
 }
