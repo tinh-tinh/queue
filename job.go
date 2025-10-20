@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -69,21 +70,24 @@ type Callback func() error
 func (job *Job) Process(cb Callback) {
 	job.Status = ActiveStatus
 	job.ProcessedOn = time.Now()
-	job.queue.formatLog(LoggerInfo, "Running job %s progress\n\n", job.Id)
+	job.queue.formatLog(LoggerInfo, "Running job %s progress", job.Id)
+
 	defer func() {
 		if r := recover(); r != nil {
 			failedReason := fmt.Sprintf("%v", r)
 			job.HandlerError(failedReason)
 		}
 	}()
+
 	err := cb()
-	if err == nil {
-		job.FinishedOn = time.Now()
-		job.Status = CompletedStatus
-		job.queue.formatLog(LoggerInfo, "Job %s done in %dms\n\n", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
-	} else {
+	if err != nil {
 		job.HandlerError(err.Error())
+		return
 	}
+
+	job.FinishedOn = time.Now()
+	job.Status = CompletedStatus
+	job.queue.formatLog(LoggerInfo, "Job %s done in %dms", job.Id, job.FinishedOn.Sub(job.ProcessedOn).Milliseconds())
 }
 
 func (job *Job) HandlerError(reasonError string) {
@@ -91,16 +95,16 @@ func (job *Job) HandlerError(reasonError string) {
 	job.Status = FailedStatus
 	// Store error
 	client := job.queue.client
-	_, err := client.HSet(context.Background(), job.queue.Name, job.Id, job.FailedReason).Result()
+	_, err := client.Set(context.Background(), fmt.Sprintf("%s:%s", strings.ToLower(job.queue.Name), job.Id), job.FailedReason, 0).Result()
 	if err != nil {
-		job.queue.formatLog(LoggerInfo, "Failed to store error: %s\n\n", err.Error())
+		job.queue.formatLog(LoggerFatal, "Failed to store error: %s", err.Error())
 	}
 	if job.RetryFailures > 0 {
 		job.Status = DelayedStatus
 		job.RetryFailures--
-		job.queue.formatLog(LoggerInfo, "Add job %s for retry (%d remains) \n\n", job.Id, job.RetryFailures)
+		job.queue.formatLog(LoggerWarn, "Add job %s for retry (%d remains) ", job.Id, job.RetryFailures)
 	} else {
-		job.queue.formatLog(LoggerInfo, "Failed job %s \n\n", job.Id)
+		job.queue.formatLog(LoggerError, "Failed job %s ", job.Id)
 	}
 }
 

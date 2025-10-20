@@ -207,7 +207,7 @@ func TestDisableLog(t *testing.T) {
 		},
 		Workers:       3,
 		RetryFailures: 3,
-		Logger:        queue.LoggerDisabled,
+		DisableLog:    true,
 	})
 
 	userQueue.Process(func(job *queue.Job) {
@@ -232,7 +232,6 @@ func Test_LoggerInfo(t *testing.T) {
 		},
 		Workers:       3,
 		RetryFailures: 3,
-		Logger:        queue.LoggerInfo,
 	})
 
 	userQueue.Process(func(job *queue.Job) {
@@ -467,4 +466,11 @@ func Test_Timeout(t *testing.T) {
 
 	failedJob := userTimeoutQueue.CountJobs(queue.FailedStatus)
 	require.Equal(t, 1, failedJob)
+}
+
+func TestPanic(t *testing.T) {
+	require.Panics(t, func() {
+		abc := queue.New("Abc", nil)
+		abc.Pause()
+	})
 }

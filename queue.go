@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"fmt"
-	"log"
 	"slices"
 	"sort"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"github.com/tinh-tinh/tinhtinh/v2/common"
+	"github.com/tinh-tinh/tinhtinh/v2/middleware/logger"
 )
 
 type JobFnc func(job *Job)
@@ -30,6 +30,7 @@ type Queue struct {
 	cronPattern string
 	running     bool
 	config      Options
+	Logger      Logger
 }
 
 type RateLimiter struct {
@@ -43,7 +44,8 @@ type Options struct {
 	RetryFailures    int
 	Limiter          *RateLimiter
 	Pattern          string
-	Logger           LoggerType
+	Logger           Logger
+	DisableLog       bool
 	RemoveOnComplete bool
 	RemoveOnFail     bool
 	Delay            time.Duration
@@ -62,6 +64,10 @@ type Options struct {
 //
 // The returned queue is ready to use.
 func New(name string, opt *Options) *Queue {
+	if opt == nil {
+		panic("store missing config")
+	}
+
 	client := redis.NewClient(opt.Connect)
 	pool := goredis.NewPool(client)
 	rs := redsync.New(pool)
@@ -75,8 +81,8 @@ func New(name string, opt *Options) *Queue {
 		config:  *opt,
 	}
 
-	if opt.Logger == "" {
-		queue.config.Logger = LoggerDefault
+	if opt.Logger == nil {
+		queue.config.Logger = logger.Create(logger.Options{})
 	}
 
 	if opt.Pattern != "" {
@@ -96,10 +102,10 @@ func New(name string, opt *Options) *Queue {
 func (q *Queue) AddJob(opt AddJobOptions) {
 	var job *Job
 	if q.IsLimit() {
-		q.formatLog(LoggerInfo, "Add job %s to delay\n", opt.Id)
+		q.formatLog(LoggerInfo, "Add job %s to delay", opt.Id)
 		job = q.delayJob(opt)
 	} else {
-		q.formatLog(LoggerInfo, "Add job %s to waiting\n", opt.Id)
+		q.formatLog(LoggerInfo, "Add job %s to waiting", opt.Id)
 		job = q.newJob(opt)
 	}
 	q.jobs = append(q.jobs, *job)
@@ -121,10 +127,10 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 	for _, option := range options {
 		var job *Job
 		if q.IsLimit() {
-			q.formatLog(LoggerInfo, "Add job %s to delay\n", option.Id)
+			q.formatLog(LoggerInfo, "Add job %s to delay", option.Id)
 			job = q.delayJob(option)
 		} else {
-			q.formatLog(LoggerInfo, "Add job %s to waiting\n", option.Id)
+			q.formatLog(LoggerInfo, "Add job %s to waiting", option.Id)
 			job = q.newJob(option)
 		}
 		q.jobs = append(q.jobs, *job)
@@ -141,7 +147,7 @@ func (q *Queue) Process(jobFnc JobFnc) {
 	if q.scheduler != nil {
 		_, err := q.scheduler.AddFunc(q.cronPattern, func() { q.Run() })
 		if err != nil {
-			q.formatLog(LoggerFatal, "failed to add job: %v\n", err)
+			q.formatLog(LoggerError, "failed to add job: %v", err)
 		}
 		q.scheduler.Start()
 	}
@@ -153,12 +159,12 @@ func (q *Queue) Process(jobFnc JobFnc) {
 // stored.
 func (q *Queue) Run() {
 	if !q.running {
-		q.formatLog(LoggerInfo, "Queue is not running")
+		q.formatLog(LoggerWarn, "Queue is not running")
 		return
 	}
 	// Lock the mutex
 	if err := q.mutex.Lock(); err != nil {
-		q.formatLog(LoggerFatal, "Error when lock mutex: %v\n", err)
+		q.formatLog(LoggerError, "Error when lock mutex: %v", err)
 		return
 	}
 	execJobs := []*Job{}
@@ -192,7 +198,7 @@ func (q *Queue) Run() {
 				defer func() {
 					if r := recover(); r != nil {
 						failedReason := fmt.Sprintf("%v", r)
-						q.formatLog(LoggerInfo, "Error when processing job: %v\n", failedReason)
+						q.formatLog(LoggerInfo, "Error when processing job: %v", failedReason)
 					}
 				}()
 				q.jobFnc(job)
@@ -206,7 +212,7 @@ func (q *Queue) Run() {
 
 		select {
 		case <-done:
-			q.formatLog(LoggerInfo, "All jobs done\n")
+			q.formatLog(LoggerInfo, "All jobs done")
 		case <-ctx.Done():
 			q.MarkJobFailedTimeout(numJobs)
 		}
@@ -220,7 +226,7 @@ func (q *Queue) Run() {
 	q.Retry()
 	// Unlock the mutex
 	if ok, err := q.mutex.Unlock(); !ok || err != nil {
-		q.formatLog(LoggerFatal, "Error when unlock mutex: %v\n", err)
+		q.formatLog(LoggerError, "Error when unlock mutex: %v", err)
 	}
 }
 
@@ -273,7 +279,7 @@ func (q *Queue) Retry() {
 
 		select {
 		case <-done:
-			q.formatLog(LoggerInfo, "All jobs done when retry\n")
+			q.formatLog(LoggerInfo, "All jobs done when retry")
 		case <-ctx.Done():
 			q.MarkJobFailedTimeout(numJobs)
 		}
@@ -345,7 +351,7 @@ func (q *Queue) IsLimit() bool {
 	} else {
 		value, err := client.Incr(q.ctx, q.Name).Result()
 		if err != nil {
-			q.formatLog(LoggerPanic, "Error when count redis: %v\n", err)
+			q.formatLog(LoggerError, "Error when count redis: %v", err)
 		}
 		if value == 1 {
 			client.Expire(q.ctx, q.Name, q.config.Limiter.Duration)
@@ -393,22 +399,21 @@ func (q *Queue) MarkJobFailedTimeout(numberJobs []*Job) {
 }
 
 func (q *Queue) formatLog(logType LoggerType, format string, v ...any) {
-	if q.config.Logger == LoggerDisabled {
+	if q.config.DisableLog {
 		return
-	} else if q.config.Logger == LoggerDefault {
-		q.log(logType, format, v...)
-	} else if q.config.Logger == logType {
-		q.log(logType, format, v...)
 	}
+	q.log(logType, format, v...)
 }
 
 func (q *Queue) log(logType LoggerType, format string, v ...any) {
 	switch logType {
 	case LoggerInfo:
-		log.Printf(format, v...)
+		q.config.Logger.Infof(format, v...)
+	case LoggerWarn:
+		q.config.Logger.Warnf(format, v...)
+	case LoggerError:
+		q.config.Logger.Errorf(format, v...)
 	case LoggerFatal:
-		log.Fatalf(format, v...)
-	case LoggerPanic:
-		log.Panicf(format, v...)
+		q.config.Logger.Fatalf(format, v...)
 	}
 }
