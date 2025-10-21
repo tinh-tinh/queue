@@ -27,6 +27,7 @@ func Test_Queue(t *testing.T) {
 			Max:      3,
 			Duration: time.Second,
 		},
+		Prefix: "abc",
 	})
 
 	userQueue.Process(func(job *queue.Job) {

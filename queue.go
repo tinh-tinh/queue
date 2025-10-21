@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +51,7 @@ type Options struct {
 	RemoveOnFail     bool
 	Delay            time.Duration
 	Timeout          time.Duration // Default: 1 minutes
+	Prefix           string
 }
 
 // New creates a new queue with the given name and options. The name is used to
@@ -344,17 +346,19 @@ func (q *Queue) IsLimit() bool {
 		return false
 	}
 	client := q.client
-	attemps, _ := client.Get(q.ctx, q.Name).Result()
+
+	key := q.getKey()
+	attemps, _ := client.Get(q.ctx, key).Result()
 	attempNum, _ := strconv.Atoi(attemps)
 	if attemps != "" && attempNum >= q.config.Limiter.Max {
 		return true
 	} else {
-		value, err := client.Incr(q.ctx, q.Name).Result()
+		value, err := client.Incr(q.ctx, key).Result()
 		if err != nil {
 			q.formatLog(LoggerError, "Error when count redis: %v", err)
 		}
 		if value == 1 {
-			client.Expire(q.ctx, q.Name, q.config.Limiter.Duration)
+			client.Expire(q.ctx, key, q.config.Limiter.Duration)
 		}
 		return false
 	}
@@ -416,4 +420,12 @@ func (q *Queue) log(logType LoggerType, format string, v ...any) {
 	case LoggerFatal:
 		q.config.Logger.Fatalf(format, v...)
 	}
+}
+
+func (q *Queue) getKey() string {
+	if q.config.Prefix != "" {
+		prefix := q.config.Prefix
+		return strings.ToLower(prefix + q.Name)
+	}
+	return strings.ToLower(q.Name)
 }
