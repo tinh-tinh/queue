@@ -42,7 +42,7 @@ func ForRootFactory(factory func(ref core.RefProvider) *Options) core.Modules {
 //
 // The name is in the form "<name>Queue".
 func getQueueName(name string) core.Provide {
-	return core.Provide(fmt.Sprintf("%sQueue", name))
+	return core.Provide(fmt.Sprintf("%s_QUEUE", name))
 }
 
 // Register registers a new queue module with the given name and options. The

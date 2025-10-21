@@ -93,19 +93,22 @@ func (job *Job) Process(cb Callback) {
 func (job *Job) HandlerError(reasonError string) {
 	job.FailedReason = reasonError
 	job.Status = FailedStatus
+
 	// Store error
-	client := job.queue.client
-	_, err := client.Set(context.Background(), fmt.Sprintf("%s:%s", strings.ToLower(job.queue.Name), job.Id), job.FailedReason, 0).Result()
-	if err != nil {
-		job.queue.formatLog(LoggerFatal, "Failed to store error: %s", err.Error())
-	}
-	if job.RetryFailures > 0 {
-		job.Status = DelayedStatus
-		job.RetryFailures--
-		job.queue.formatLog(LoggerWarn, "Add job %s for retry (%d remains) ", job.Id, job.RetryFailures)
-	} else {
+	if job.RetryFailures <= 0 {
+		client := job.queue.client
+		key := job.getKey()
+		_, err := client.Set(context.Background(), key, job.FailedReason, 0).Result()
+		if err != nil {
+			job.queue.formatLog(LoggerFatal, "Failed to store error: %s", err.Error())
+		}
 		job.queue.formatLog(LoggerError, "Failed job %s ", job.Id)
+		return
 	}
+
+	job.Status = DelayedStatus
+	job.RetryFailures--
+	job.queue.formatLog(LoggerWarn, "Add job %s for retry (%d remains) ", job.Id, job.RetryFailures)
 }
 
 // IsReady returns true if the job is ready to be processed. If the job uses a
@@ -121,4 +124,12 @@ func (job *Job) IsReady() bool {
 // IsFinished returns true if the job has finished, either successfully or with an error.
 func (job *Job) IsFinished() bool {
 	return job.Status == FailedStatus || job.Status == CompletedStatus
+}
+
+func (job *Job) getKey() string {
+	if job.queue.config.Prefix != "" {
+		prefix := job.queue.config.Prefix
+		return fmt.Sprintf("%s:%s", strings.ToLower(prefix+job.queue.Name), job.Id)
+	}
+	return fmt.Sprintf("%s:%s", strings.ToLower(job.queue.Name), job.Id)
 }
