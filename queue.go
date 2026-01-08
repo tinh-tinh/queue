@@ -122,9 +122,8 @@ func (q *Queue) AddJob(opt AddJobOptions) {
 	insertIdx := sort.Search(len(q.jobs), func(i int) bool {
 		return q.jobs[i].Priority < job.Priority
 	})
-	q.jobs = append(q.jobs, Job{})
-	copy(q.jobs[insertIdx+1:], q.jobs[insertIdx:])
-	q.jobs[insertIdx] = *job
+	// Efficient insertion: grow slice and insert at correct position
+	q.jobs = append(q.jobs[:insertIdx], append([]Job{*job}, q.jobs[insertIdx:]...)...)
 	q.Run()
 }
 
@@ -139,6 +138,7 @@ type AddJobOptions struct {
 // waiting list and the queue is run.
 func (q *Queue) BulkAddJob(options []AddJobOptions) {
 	if len(options) == 0 {
+		q.Run()
 		return
 	}
 	
