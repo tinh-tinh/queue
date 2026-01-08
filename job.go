@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -127,9 +126,6 @@ func (job *Job) IsFinished() bool {
 }
 
 func (job *Job) getKey() string {
-	if job.queue.config.Prefix != "" {
-		prefix := job.queue.config.Prefix
-		return fmt.Sprintf("%s:%s", strings.ToLower(prefix+job.queue.Name), job.Id)
-	}
-	return fmt.Sprintf("%s:%s", strings.ToLower(job.queue.Name), job.Id)
+	// Use cached queue key to avoid repeated string operations
+	return job.queue.cachedKey + ":" + job.Id
 }
