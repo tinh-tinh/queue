@@ -37,7 +37,6 @@ func (queue *Queue) newJob(opt AddJobOptions) *Job {
 		Data:          opt.Data,
 		Priority:      opt.Priority,
 		Status:        WaitStatus,
-		Stacktrace:    []string{},
 		queue:         queue,
 		RetryFailures: queue.config.RetryFailures,
 	}
@@ -53,7 +52,6 @@ func (queue *Queue) delayJob(opt AddJobOptions) *Job {
 		Data:          opt.Data,
 		Priority:      opt.Priority,
 		Status:        DelayedStatus,
-		Stacktrace:    []string{},
 		queue:         queue,
 		RetryFailures: queue.config.RetryFailures,
 	}
@@ -92,6 +90,7 @@ func (job *Job) Process(cb Callback) {
 func (job *Job) HandlerError(reasonError string) {
 	job.FailedReason = reasonError
 	job.Status = FailedStatus
+	job.Stacktrace = append(job.Stacktrace, reasonError)
 
 	// Store error
 	if job.RetryFailures <= 0 {
