@@ -15,7 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/robfig/cron/v3"
 	"github.com/tinh-tinh/tinhtinh/v2/common"
-	"github.com/tinh-tinh/tinhtinh/v2/middleware/logger"
+	"github.com/tinh-tinh/tinhtinh/v2/common/logger"
 )
 
 type JobFnc func(job *Job)
@@ -141,10 +141,10 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 		q.Run()
 		return
 	}
-	
+
 	// Sort input options by priority once
 	sort.SliceStable(options, func(i, j int) bool { return options[i].Priority > options[j].Priority })
-	
+
 	// Pre-allocate space for new jobs
 	newJobs := make([]Job, 0, len(options))
 	for _, option := range options {
@@ -158,7 +158,7 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 		}
 		newJobs = append(newJobs, *job)
 	}
-	
+
 	// Merge sorted slices efficiently
 	q.jobs = mergeSortedJobs(q.jobs, newJobs)
 	q.Run()
@@ -168,7 +168,7 @@ func (q *Queue) BulkAddJob(options []AddJobOptions) {
 func mergeSortedJobs(jobs1, jobs2 []Job) []Job {
 	result := make([]Job, 0, len(jobs1)+len(jobs2))
 	i, j := 0, 0
-	
+
 	for i < len(jobs1) && j < len(jobs2) {
 		if jobs1[i].Priority >= jobs2[j].Priority {
 			result = append(result, jobs1[i])
@@ -178,7 +178,7 @@ func mergeSortedJobs(jobs1, jobs2 []Job) []Job {
 			j++
 		}
 	}
-	
+
 	result = append(result, jobs1[i:]...)
 	result = append(result, jobs2[j:]...)
 	return result
