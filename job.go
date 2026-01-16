@@ -90,6 +90,7 @@ func (job *Job) Process(cb Callback) {
 func (job *Job) HandlerError(reasonError string) {
 	job.FailedReason = reasonError
 	job.Status = FailedStatus
+	job.Stacktrace = append(job.Stacktrace, reasonError)
 
 	// Store error
 	if job.RetryFailures <= 0 {
