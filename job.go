@@ -37,7 +37,6 @@ func (queue *Queue) newJob(opt AddJobOptions) *Job {
 		Data:          opt.Data,
 		Priority:      opt.Priority,
 		Status:        WaitStatus,
-		Stacktrace:    []string{},
 		queue:         queue,
 		RetryFailures: queue.config.RetryFailures,
 	}
@@ -53,7 +52,6 @@ func (queue *Queue) delayJob(opt AddJobOptions) *Job {
 		Data:          opt.Data,
 		Priority:      opt.Priority,
 		Status:        DelayedStatus,
-		Stacktrace:    []string{},
 		queue:         queue,
 		RetryFailures: queue.config.RetryFailures,
 	}

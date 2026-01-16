@@ -122,8 +122,10 @@ func (q *Queue) AddJob(opt AddJobOptions) {
 	insertIdx := sort.Search(len(q.jobs), func(i int) bool {
 		return q.jobs[i].Priority < job.Priority
 	})
-	// Efficient insertion: grow slice and insert at correct position
-	q.jobs = append(q.jobs[:insertIdx], append([]Job{*job}, q.jobs[insertIdx:]...)...)
+	// Efficient insertion: grow slice by one, shift elements, and insert at correct position
+	q.jobs = append(q.jobs, Job{})
+	copy(q.jobs[insertIdx+1:], q.jobs[insertIdx:])
+	q.jobs[insertIdx] = *job
 	q.Run()
 }
 
@@ -212,7 +214,8 @@ func (q *Queue) Run() {
 		q.formatLog(LoggerError, "Error when lock mutex: %v", err)
 		return
 	}
-	execJobs := []*Job{}
+	// Pre-allocate with estimated capacity to reduce allocations
+	execJobs := make([]*Job, 0, len(q.jobs))
 	for i := range q.jobs {
 		if q.jobs[i].IsReady() {
 			execJobs = append(execJobs, &q.jobs[i])
@@ -281,7 +284,8 @@ func (q *Queue) Run() {
 // and removes it from the list of jobs to retry. Finally, it unlocks the mutex.
 
 func (q *Queue) Retry() {
-	execJobs := []*Job{}
+	// Pre-allocate with estimated capacity to reduce allocations
+	execJobs := make([]*Job, 0, len(q.jobs))
 	// For retry failures
 	for i := range q.jobs {
 		if q.jobs[i].Status == DelayedStatus {
@@ -303,7 +307,8 @@ func (q *Queue) Retry() {
 		var wg sync.WaitGroup
 		done := make(chan struct{})
 
-		var finishedJob []string
+		// Pre-allocate finishedJob slice with expected capacity
+		finishedJob := make([]string, 0, min)
 		var finishedMu sync.Mutex
 		for i := range numJobs {
 			job := numJobs[i]
@@ -335,7 +340,7 @@ func (q *Queue) Retry() {
 		if len(finishedJob) > 0 {
 			for _, id := range finishedJob {
 				if len(execJobs) == 1 && execJobs[0].Id == id {
-					execJobs = []*Job{}
+					execJobs = execJobs[:0]
 					break
 				}
 				idx := slices.IndexFunc(execJobs, func(j *Job) bool { return j.Id == id })
