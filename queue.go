@@ -13,7 +13,6 @@ import (
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
-	"github.com/robfig/cron/v3"
 	"github.com/tinh-tinh/tinhtinh/v2/common"
 	"github.com/tinh-tinh/tinhtinh/v2/common/logger"
 )
@@ -21,18 +20,20 @@ import (
 type JobFnc func(job *Job)
 
 type Queue struct {
-	Name        string
-	client      *redis.Client
-	mutex       *redsync.Mutex
-	jobFnc      JobFnc
-	jobs        []Job
-	ctx         context.Context
-	scheduler   *cron.Cron
-	cronPattern string
-	running     bool
-	config      Options
-	Logger      Logger
-	cachedKey   string // Cache the computed key to avoid repeated string operations
+	Name             string
+	client           *redis.Client
+	mutex            *redsync.Mutex
+	jobFnc           JobFnc
+	jobs             []Job
+	ctx              context.Context
+	schedulerTicker  *time.Ticker
+	schedulerDone    chan struct{}
+	schedulerRunning bool // Track if scheduler is currently running
+	schedulerKey     string
+	running          bool
+	config           Options
+	Logger           Logger
+	cachedKey        string // Cache the computed key to avoid repeated string operations
 }
 
 type RateLimiter struct {
@@ -45,6 +46,7 @@ type Options struct {
 	RetryFailures    int
 	Limiter          *RateLimiter
 	Pattern          string
+	ScheduleInterval time.Duration // Polling interval for distributed scheduler (default: 5s)
 	Logger           Logger
 	DisableLog       bool
 	RemoveOnComplete bool
@@ -84,15 +86,9 @@ func New(name string, opt *Options) *Queue {
 	}
 
 	if opt.Logger == nil {
-		queue.config.Logger = logger.Create(logger.Options{})
-	}
-
-	if opt.Pattern != "" {
-		queue.scheduler = cron.New()
-		queue.cronPattern = opt.Pattern
-	}
-	if opt.Timeout == 0 {
-		queue.config.Timeout = 1 * time.Minute
+		queue.config.Logger = logger.Create(logger.Options{
+			Console: !opt.DisableLog,
+		})
 	}
 
 	// Pre-compute and cache the key
@@ -100,6 +96,30 @@ func New(name string, opt *Options) *Queue {
 		queue.cachedKey = strings.ToLower(opt.Prefix + name)
 	} else {
 		queue.cachedKey = strings.ToLower(name)
+	}
+
+	// Initialize scheduler key for distributed scheduling
+	queue.schedulerKey = queue.cachedKey + ":scheduled"
+
+	// Start distributed scheduler if Pattern is configured
+	if opt.Pattern != "" {
+		interval := opt.ScheduleInterval
+		if interval == 0 {
+			// Try to parse the pattern to get interval
+			parsedInterval, err := parsePattern(opt.Pattern)
+			if err != nil {
+				// Log warning and fall back to default
+				queue.formatLog(LoggerWarn, "Failed to parse pattern '%s': %v, using default 5s interval", opt.Pattern, err)
+				interval = 5 * time.Second
+			} else {
+				interval = parsedInterval
+			}
+		}
+		queue.startScheduler(interval)
+	}
+
+	if opt.Timeout == 0 {
+		queue.config.Timeout = 1 * time.Minute
 	}
 
 	return queue
@@ -185,18 +205,10 @@ func mergeSortedJobs(jobs1, jobs2 []Job) []Job {
 	return result
 }
 
-// Process sets the callback for the queue to process jobs. If the queue has a
-// scheduler, it will be started with the given cron pattern. Otherwise, the
-// callback is simply stored.
+// Process sets the callback for the queue to process jobs.
+// The distributed scheduler (if configured) is already running from New().
 func (q *Queue) Process(jobFnc JobFnc) {
 	q.jobFnc = jobFnc
-	if q.scheduler != nil {
-		_, err := q.scheduler.AddFunc(q.cronPattern, func() { q.Run() })
-		if err != nil {
-			q.formatLog(LoggerError, "failed to add job: %v", err)
-		}
-		q.scheduler.Start()
-	}
 }
 
 // Run runs all ready jobs in the queue. It locks the mutex, runs all ready jobs
@@ -416,15 +428,32 @@ func (q *Queue) IsLimit() bool {
 
 // Pause stops the queue from running. When paused, the queue will not accept new
 // jobs and will not run any jobs in the queue. It will resume when Resume is
-// called.
+// called. The scheduler is also stopped if active.
 func (q *Queue) Pause() {
 	q.running = false
+	q.stopScheduler()
 }
 
 // Resume resumes the queue from a paused state. When resumed, the queue will
-// accept new jobs and run any jobs in the queue.
+// accept new jobs and run any jobs in the queue. The scheduler is also restarted
+// if it was previously configured.
 func (q *Queue) Resume() {
 	q.running = true
+	if q.config.Pattern != "" {
+		interval := q.config.ScheduleInterval
+		if interval == 0 {
+			// Try to parse the pattern to get interval
+			parsedInterval, err := parsePattern(q.config.Pattern)
+			if err != nil {
+				// Log warning and fall back to default
+				q.formatLog(LoggerWarn, "Failed to parse pattern '%s': %v, using default 5s interval", q.config.Pattern, err)
+				interval = 5 * time.Second
+			} else {
+				interval = parsedInterval
+			}
+		}
+		q.startScheduler(interval)
+	}
 	q.Run()
 }
 

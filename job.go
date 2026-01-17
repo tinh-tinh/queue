@@ -109,14 +109,10 @@ func (job *Job) HandlerError(reasonError string) {
 	job.queue.formatLog(LoggerWarn, "Add job %s for retry (%d remains) ", job.Id, job.RetryFailures)
 }
 
-// IsReady returns true if the job is ready to be processed. If the job uses a
-// scheduler, it will always be ready. Otherwise, the job is ready if it is
-// waiting or active.
+// IsReady returns true if the job is ready to be processed.
+// Jobs are ready if they are waiting or active.
 func (job *Job) IsReady() bool {
-	if job.queue.scheduler == nil {
-		return job.Status == WaitStatus || job.Status == ActiveStatus
-	}
-	return true
+	return job.Status == WaitStatus || job.Status == ActiveStatus
 }
 
 // IsFinished returns true if the job has finished, either successfully or with an error.
