@@ -39,7 +39,6 @@ type RateLimiter struct {
 	Max      int
 	Duration time.Duration
 }
-
 type Options struct {
 	Connect          *redis.Options
 	Workers          int
@@ -475,4 +474,96 @@ func (q *Queue) log(logType LoggerType, format string, v ...any) {
 
 func (q *Queue) getKey() string {
 	return q.cachedKey
+}
+
+// scanFailedJobKeys scans Redis for all keys matching the failed job pattern.
+// Returns a slice of all matching keys or an error if the scan fails.
+func (q *Queue) scanFailedJobKeys() ([]string, error) {
+	pattern := q.cachedKey + ":*"
+	var allKeys []string
+
+	var cursor uint64
+	for {
+		keys, nextCursor, err := q.client.Scan(q.ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan Redis keys: %w", err)
+		}
+
+		allKeys = append(allKeys, keys...)
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return allKeys, nil
+}
+
+// GetFailedJobs retrieves all failed jobs stored in Redis for this queue.
+// It returns a slice of Job with Id, FailedReason, and Status populated.
+// Other fields (Data, Priority, etc.) are not available as only the failure
+// reason is stored in Redis. Returns an error if the Redis operation fails.
+func (q *Queue) GetFailedJobs() ([]Job, error) {
+	keys, err := q.scanFailedJobKeys()
+	if err != nil {
+		return nil, err
+	}
+
+	var failedJobs []Job
+	for _, key := range keys {
+		reason, err := q.client.Get(q.ctx, key).Result()
+		if err != nil {
+			// Only skip missing keys; propagate all other errors (network, timeout, etc.)
+			if err == redis.Nil {
+				continue
+			}
+			return nil, fmt.Errorf("failed to retrieve job data: %w", err)
+		}
+
+		// Extract job ID from key (format: {prefix}{queueName}:{jobId})
+		jobId := strings.TrimPrefix(key, q.cachedKey+":")
+		failedJobs = append(failedJobs, Job{
+			Id:           jobId,
+			FailedReason: reason,
+			Status:       FailedStatus,
+			queue:        q,
+		})
+	}
+
+	return failedJobs, nil
+}
+
+// GetFailedJob retrieves the failure reason for a specific job by its ID.
+// Returns the failure reason string or an error if the job is not found
+// or if the Redis operation fails.
+func (q *Queue) GetFailedJob(jobId string) (string, error) {
+	key := q.cachedKey + ":" + jobId
+	reason, err := q.client.Get(q.ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return "", fmt.Errorf("failed job with ID '%s' not found", jobId)
+		}
+		return "", fmt.Errorf("failed to retrieve job: %w", err)
+	}
+	return reason, nil
+}
+
+// ClearFailedJobs removes all failed job records from Redis for this queue.
+// Returns an error if the Redis operation fails.
+func (q *Queue) ClearFailedJobs() error {
+	keysToDelete, err := q.scanFailedJobKeys()
+	if err != nil {
+		return err
+	}
+
+	if len(keysToDelete) > 0 {
+		_, err := q.client.Del(q.ctx, keysToDelete...).Result()
+		if err != nil {
+			return fmt.Errorf("failed to delete keys: %w", err)
+		}
+		q.formatLog(LoggerInfo, "Cleared %d failed job(s)", len(keysToDelete))
+	}
+
+	return nil
 }
