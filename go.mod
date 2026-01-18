@@ -7,6 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/go-redsync/redsync/v4 v4.15.0
 	github.com/redis/go-redis/v9 v9.17.2
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.9.0
 	github.com/tinh-tinh/tinhtinh/v2 v2.5.0
 	golang.org/x/crypto v0.45.0
